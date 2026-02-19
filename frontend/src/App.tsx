@@ -5,7 +5,9 @@ import DashboardPage from './pages/DashboardPage'
 import TasksPage from './pages/TasksPage'
 import TaskDetailPage from './pages/TaskDetailPage'
 import CtiPage from './pages/CtiPage'
+import AdminPage from './pages/AdminPage'
 import PrivateRoute from './components/PrivateRoute'
+import AdminRoute from './components/AdminRoute'
 
 export default function App() {
   return (
@@ -43,6 +45,14 @@ export default function App() {
             <PrivateRoute>
               <CtiPage />
             </PrivateRoute>
+          }
+        />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminPage />
+            </AdminRoute>
           }
         />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

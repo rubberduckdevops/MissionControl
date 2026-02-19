@@ -79,6 +79,16 @@ export default function Navbar() {
             >
               CTI
             </Link>
+            {user.role === 'admin' && (
+              <Link
+                to="/admin"
+                style={linkStyle('admin')}
+                onMouseEnter={() => setHoveredLink('admin')}
+                onMouseLeave={() => setHoveredLink(null)}
+              >
+                Admin
+              </Link>
+            )}
           </div>
         )}
       </div>
