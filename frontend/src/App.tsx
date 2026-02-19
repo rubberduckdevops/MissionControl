@@ -4,6 +4,7 @@ import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import TasksPage from './pages/TasksPage'
 import TaskDetailPage from './pages/TaskDetailPage'
+import CtiPage from './pages/CtiPage'
 import PrivateRoute from './components/PrivateRoute'
 
 export default function App() {
@@ -33,6 +34,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <TaskDetailPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/cti"
+          element={
+            <PrivateRoute>
+              <CtiPage />
             </PrivateRoute>
           }
         />

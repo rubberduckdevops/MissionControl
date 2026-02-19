@@ -3,6 +3,36 @@ import { useParams, useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 
+interface UserPublic {
+  id: string
+  email: string
+  username: string
+  role: string
+}
+
+interface Category {
+  _id: string
+  name: string
+}
+
+interface CtiType {
+  _id: string
+  name: string
+  category_id: string
+}
+
+interface CtiItem {
+  _id: string
+  name: string
+  type_id: string
+}
+
+interface CtiSelection {
+  category_id: string
+  type_id: string
+  item_id: string
+}
+
 interface TaskNote {
   _id: string
   note: string
@@ -16,6 +46,8 @@ interface Task {
   description: string
   status: string
   notes: TaskNote[]
+  assignee_id?: string
+  cti?: CtiSelection
   created_at: string
   updated_at: string
 }
@@ -78,6 +110,14 @@ function PanelHeader({ title, accent = '#00d4ff' }: { title: string; accent?: st
   )
 }
 
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' as const }}>
+      {children}
+    </span>
+  )
+}
+
 export default function TaskDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -86,35 +126,108 @@ export default function TaskDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Users and CTI data
+  const [users, setUsers] = useState<UserPublic[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [editTypes, setEditTypes] = useState<CtiType[]>([])
+  const [editItems, setEditItems] = useState<CtiItem[]>([])
+
+  // Edit form state
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [status, setStatus] = useState('')
+  const [assigneeId, setAssigneeId] = useState('')
+  const [editCategoryId, setEditCategoryId] = useState('')
+  const [editTypeId, setEditTypeId] = useState('')
+  const [editItemId, setEditItemId] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
 
+  // Notes state
   const [noteText, setNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [noteError, setNoteError] = useState('')
 
+  // Load task + users + categories in parallel
   useEffect(() => {
-    api
-      .get<Task>(`/api/tasks/${id}`)
-      .then((res) => {
-        setTask(res.data)
-        setTitle(res.data.title)
-        setDescription(res.data.description)
-        setStatus(res.data.status)
+    Promise.all([
+      api.get<Task>(`/api/tasks/${id}`),
+      api.get<UserPublic[]>('/api/users'),
+      api.get<Category[]>('/api/cti/categories'),
+    ])
+      .then(([taskRes, usersRes, catRes]) => {
+        const t = taskRes.data
+        setTask(t)
+        setTitle(t.title)
+        setDescription(t.description)
+        setStatus(t.status)
+        setAssigneeId(t.assignee_id ?? '')
+        setUsers(usersRes.data)
+        setCategories(catRes.data)
+
+        // Pre-populate CTI selections if the task already has one
+        if (t.cti) {
+          setEditCategoryId(t.cti.category_id)
+          setEditTypeId(t.cti.type_id)
+          setEditItemId(t.cti.item_id)
+        }
       })
       .catch(() => setError('Task not found'))
       .finally(() => setLoading(false))
   }, [id])
+
+  // When edit category changes, load types
+  useEffect(() => {
+    setEditTypeId('')
+    setEditItemId('')
+    setEditItems([])
+    if (!editCategoryId) { setEditTypes([]); return }
+    api
+      .get<CtiType[]>(`/api/cti/types?category_id=${editCategoryId}`)
+      .then((r) => {
+        setEditTypes(r.data)
+        // Re-apply saved type selection after types are loaded (initial hydration)
+        if (task?.cti?.category_id === editCategoryId && task?.cti?.type_id) {
+          setEditTypeId(task.cti.type_id)
+        }
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editCategoryId])
+
+  // When edit type changes, load items
+  useEffect(() => {
+    setEditItemId('')
+    if (!editTypeId) { setEditItems([]); return }
+    api
+      .get<CtiItem[]>(`/api/cti/items?type_id=${editTypeId}`)
+      .then((r) => {
+        setEditItems(r.data)
+        // Re-apply saved item selection after items are loaded (initial hydration)
+        if (task?.cti?.type_id === editTypeId && task?.cti?.item_id) {
+          setEditItemId(task.cti.item_id)
+        }
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editTypeId])
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaveError('')
     setSaving(true)
     try {
-      const res = await api.put<Task>(`/api/tasks/${id}`, { title, description, status })
+      const cti =
+        editCategoryId && editTypeId && editItemId
+          ? { category_id: editCategoryId, type_id: editTypeId, item_id: editItemId }
+          : null
+      const res = await api.put<Task>(`/api/tasks/${id}`, {
+        title,
+        description,
+        status,
+        assignee_id: assigneeId || null,
+        cti,
+      })
       setTask(res.data)
     } catch {
       setSaveError('Failed to save changes')
@@ -146,6 +259,9 @@ export default function TaskDetailPage() {
       setNoteError('Failed to delete note')
     }
   }
+
+  const assigneeName = (uid?: string) =>
+    uid ? (users.find((u) => u.id === uid)?.username ?? uid) : 'Unassigned'
 
   const loadingEl = (
     <>
@@ -247,21 +363,15 @@ export default function TaskDetailPage() {
             )}
             <form onSubmit={handleSave}>
               <label style={{ display: 'block', marginBottom: '0.25rem' }}>
-                <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' }}>
-                  Title
-                </span>
+                <FieldLabel>Title</FieldLabel>
                 <input value={title} onChange={(e) => setTitle(e.target.value)} required />
               </label>
               <label style={{ display: 'block', marginBottom: '0.25rem' }}>
-                <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' }}>
-                  Description
-                </span>
+                <FieldLabel>Description</FieldLabel>
                 <input value={description} onChange={(e) => setDescription(e.target.value)} required />
               </label>
-              <label style={{ display: 'block', marginBottom: '1rem' }}>
-                <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' }}>
-                  Status
-                </span>
+              <label style={{ display: 'block', marginBottom: '0.25rem' }}>
+                <FieldLabel>Status</FieldLabel>
                 <select value={status} onChange={(e) => setStatus(e.target.value)}>
                   {STATUSES.map((s) => (
                     <option key={s} value={s}>
@@ -270,17 +380,77 @@ export default function TaskDetailPage() {
                   ))}
                 </select>
               </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+
+              {/* Assignee */}
+              <label style={{ display: 'block', marginBottom: '0.25rem' }}>
+                <FieldLabel>Assignee</FieldLabel>
+                <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)}>
+                  <option value="">Unassigned</option>
+                  {users.map((u) => (
+                    <option key={u.id} value={u.id}>{u.username}</option>
+                  ))}
+                </select>
+              </label>
+
+              {/* CTI cascading dropdowns */}
+              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                <div style={{ flex: '1 1 130px' }}>
+                  <FieldLabel>Category</FieldLabel>
+                  <select
+                    value={editCategoryId}
+                    onChange={(e) => setEditCategoryId(e.target.value)}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <option value="">— none —</option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ flex: '1 1 130px' }}>
+                  <FieldLabel>Type</FieldLabel>
+                  <select
+                    value={editTypeId}
+                    onChange={(e) => setEditTypeId(e.target.value)}
+                    disabled={!editCategoryId}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <option value="">— none —</option>
+                    {editTypes.map((t) => (
+                      <option key={t._id} value={t._id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ flex: '1 1 130px' }}>
+                  <FieldLabel>Item</FieldLabel>
+                  <select
+                    value={editItemId}
+                    onChange={(e) => setEditItemId(e.target.value)}
+                    disabled={!editTypeId}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <option value="">— none —</option>
+                    {editItems.map((i) => (
+                      <option key={i._id} value={i._id}>{i.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', marginTop: '1rem' }}>
                 <button type="submit" disabled={saving} style={{ letterSpacing: '0.1em' }}>
                   {saving ? 'Saving…' : 'Save Changes'}
                 </button>
                 <StatusBadge status={task.status} />
+                <span style={{ fontSize: '0.7rem', color: '#52809e' }}>
+                  {assigneeName(task.assignee_id)}
+                </span>
               </div>
             </form>
           </div>
         </div>
 
-        {/* Log panel */}
+        {/* Notes panel */}
         <div
           style={{
             background: '#132035',
@@ -291,7 +461,6 @@ export default function TaskDetailPage() {
         >
           <PanelHeader title="Notes" accent="#f59e0b" />
           <div style={{ padding: '1.25rem' }}>
-            {/* Log entries */}
             {task.notes.length === 0 && (
               <p style={{ color: '#52809e', fontSize: '0.75rem', letterSpacing: '0.08em', marginTop: 0 }}>
                 No notes yet.
@@ -344,7 +513,6 @@ export default function TaskDetailPage() {
               ))}
             </div>
 
-            {/* Add note */}
             {noteError && (
               <div
                 style={{
@@ -361,9 +529,7 @@ export default function TaskDetailPage() {
             )}
             <form onSubmit={handleAddNote}>
               <label style={{ display: 'block', marginBottom: '0.75rem' }}>
-                <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' }}>
-                  Add a note
-                </span>
+                <FieldLabel>Add a note</FieldLabel>
                 <textarea
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}

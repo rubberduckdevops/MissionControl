@@ -71,6 +71,14 @@ export default function Navbar() {
             >
               Tasks
             </Link>
+            <Link
+              to="/cti"
+              style={linkStyle('cti')}
+              onMouseEnter={() => setHoveredLink('cti')}
+              onMouseLeave={() => setHoveredLink(null)}
+            >
+              CTI
+            </Link>
           </div>
         )}
       </div>
