@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 
@@ -50,6 +52,26 @@ interface Task {
   cti?: CtiSelection
   created_at: string
   updated_at: string
+}
+
+const markdownComponents = {
+  p:          ({ children }: any) => <p style={{ margin: '0 0 0.4rem 0' }}>{children}</p>,
+  strong:     ({ children }: any) => <strong style={{ color: '#7eb8d4' }}>{children}</strong>,
+  em:         ({ children }: any) => <em style={{ color: '#a8c8e0' }}>{children}</em>,
+  code:       ({ children }: any) => (
+    <code style={{ background: '#0a1220', border: '1px solid #1e4470', borderRadius: 2, padding: '0.1em 0.3em', fontSize: '0.8em', color: '#52b3d9', fontFamily: 'monospace' }}>{children}</code>
+  ),
+  pre:        ({ children }: any) => (
+    <pre style={{ background: '#0a1220', border: '1px solid #1e4470', borderRadius: 3, padding: '0.6rem 0.75rem', overflowX: 'auto' as const, fontSize: '0.8em', margin: '0.4rem 0' }}>{children}</pre>
+  ),
+  ul:         ({ children }: any) => <ul style={{ margin: '0.25rem 0', paddingLeft: '1.25rem' }}>{children}</ul>,
+  ol:         ({ children }: any) => <ol style={{ margin: '0.25rem 0', paddingLeft: '1.25rem' }}>{children}</ol>,
+  li:         ({ children }: any) => <li style={{ marginBottom: '0.15rem' }}>{children}</li>,
+  a:          ({ href, children }: any) => <a href={href} target="_blank" rel="noopener noreferrer" style={{ color: '#52809e', textDecoration: 'underline' }}>{children}</a>,
+  blockquote: ({ children }: any) => <blockquote style={{ borderLeft: '3px solid #1e4470', margin: '0.4rem 0', padding: '0.2rem 0.75rem', color: '#7a9ab5' }}>{children}</blockquote>,
+  h1:         ({ children }: any) => <h1 style={{ fontSize: '1.1em', color: '#7eb8d4', margin: '0.5rem 0 0.25rem' }}>{children}</h1>,
+  h2:         ({ children }: any) => <h2 style={{ fontSize: '1em',   color: '#7eb8d4', margin: '0.5rem 0 0.25rem' }}>{children}</h2>,
+  h3:         ({ children }: any) => <h3 style={{ fontSize: '0.95em',color: '#7eb8d4', margin: '0.5rem 0 0.25rem' }}>{children}</h3>,
 }
 
 const STATUSES = ['todo', 'in_progress', 'done']
@@ -491,9 +513,11 @@ export default function TaskDetailPage() {
                         {new Date(n.created_at).toLocaleString()}
                       </span>
                     </div>
-                    <p style={{ margin: 0, fontSize: '0.85rem', color: '#c8ddf0', wordBreak: 'break-word' }}>
-                      {n.note}
-                    </p>
+                    <div style={{ fontSize: '0.85rem', color: '#c8ddf0', wordBreak: 'break-word', lineHeight: '1.5' }}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                        {n.note}
+                      </ReactMarkdown>
+                    </div>
                   </div>
                   <button
                     onClick={() => handleDeleteNote(n._id)}
@@ -539,6 +563,9 @@ export default function TaskDetailPage() {
                   style={{ resize: 'vertical' }}
                 />
               </label>
+              <p style={{ margin: '0 0 0.75rem', fontSize: '0.65rem', color: '#52809e', letterSpacing: '0.05em' }}>
+                Markdown supported
+              </p>
               <button type="submit" disabled={addingNote} style={{ letterSpacing: '0.1em' }}>
                 {addingNote ? 'Adding…' : 'Add Note'}
               </button>
