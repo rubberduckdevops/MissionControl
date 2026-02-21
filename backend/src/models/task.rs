@@ -67,6 +67,56 @@ impl TaskNote {
     }
 }
 
+fn default_page() -> u64 { 1 }
+fn default_limit() -> u64 { 25 }
+
+/// Query parameters for GET /api/tasks
+/// Example: ?page=2&limit=10&status=todo,in_progress
+#[derive(Debug, Deserialize)]
+pub struct TaskQuery {
+    #[serde(default = "default_page")]
+    pub page: u64,
+    #[serde(default = "default_limit")]
+    pub limit: u64,
+    pub status: Option<String>,
+}
+
+impl TaskQuery {
+    pub fn parsed_statuses(&self) -> Result<Option<Vec<String>>, String> {
+        const VALID: &[&str] = &["todo", "in_progress", "done"];
+        match &self.status {
+            None => Ok(None),
+            Some(s) if s.trim().is_empty() => Ok(None),
+            Some(s) => {
+                let statuses: Vec<String> = s
+                    .split(',')
+                    .map(|v| v.trim().to_string())
+                    .filter(|v| !v.is_empty())
+                    .collect();
+                for status in &statuses {
+                    if !VALID.contains(&status.as_str()) {
+                        return Err(format!(
+                            "invalid status '{}': must be one of todo, in_progress, done",
+                            status
+                        ));
+                    }
+                }
+                if statuses.is_empty() { Ok(None) } else { Ok(Some(statuses)) }
+            }
+        }
+    }
+}
+
+/// Paginated response envelope for GET /api/tasks
+#[derive(Debug, Serialize)]
+pub struct PaginatedTasksResponse {
+    pub tasks: Vec<Task>,
+    pub total: u64,
+    pub page: u64,
+    pub limit: u64,
+    pub total_pages: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -122,5 +172,56 @@ mod tests {
         let json = r#"{"_id":"x","title":"T","description":"D","status":"todo","notes":null,"assignee_id":null,"cti":null,"created_at":"2024-01-01T00:00:00Z","updated_at":"2024-01-01T00:00:00Z"}"#;
         let t: Task = serde_json::from_str(json).unwrap();
         assert!(t.notes.is_empty());
+    }
+
+    #[test]
+    fn task_query_defaults() {
+        let q: TaskQuery = serde_json::from_str("{}").unwrap();
+        assert_eq!(q.page, 1);
+        assert_eq!(q.limit, 25);
+        assert!(q.status.is_none());
+    }
+
+    #[test]
+    fn task_query_parsed_statuses_valid() {
+        let q = TaskQuery { page: 1, limit: 25, status: Some("todo,in_progress".to_string()) };
+        let result = q.parsed_statuses().unwrap();
+        assert_eq!(result, Some(vec!["todo".to_string(), "in_progress".to_string()]));
+    }
+
+    #[test]
+    fn task_query_parsed_statuses_invalid() {
+        let q = TaskQuery { page: 1, limit: 25, status: Some("todo,bogus".to_string()) };
+        let err = q.parsed_statuses().unwrap_err();
+        assert!(err.contains("bogus"));
+    }
+
+    #[test]
+    fn task_query_parsed_statuses_none_when_empty_string() {
+        let q = TaskQuery { page: 1, limit: 25, status: Some("".to_string()) };
+        assert_eq!(q.parsed_statuses().unwrap(), None);
+    }
+
+    #[test]
+    fn task_query_parsed_statuses_none_when_absent() {
+        let q = TaskQuery { page: 1, limit: 25, status: None };
+        assert_eq!(q.parsed_statuses().unwrap(), None);
+    }
+
+    #[test]
+    fn paginated_response_serializes() {
+        let t = Task::new("T".to_string(), "D".to_string());
+        let r = PaginatedTasksResponse {
+            tasks: vec![t],
+            total: 1,
+            page: 1,
+            limit: 25,
+            total_pages: 1,
+        };
+        let json = serde_json::to_value(&r).unwrap();
+        assert_eq!(json["total"], 1);
+        assert_eq!(json["page"], 1);
+        assert_eq!(json["total_pages"], 1);
+        assert!(json["tasks"].is_array());
     }
 }

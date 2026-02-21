@@ -40,10 +40,32 @@ const emptyTask = {
   updated_at: '2024-01-01T00:00:00Z',
 }
 
+const paginatedEmpty = {
+  tasks: [],
+  total: 0,
+  page: 1,
+  limit: 25,
+  total_pages: 1,
+}
+
+const paginatedWithTask = {
+  tasks: [emptyTask],
+  total: 1,
+  page: 1,
+  limit: 25,
+  total_pages: 1,
+}
+
 describe('TasksPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mockApi.get.mockResolvedValue({ data: [] })
+    // Default: tasks returns paginated empty, everything else returns []
+    mockApi.get.mockImplementation((url: string) => {
+      if (url === '/api/tasks') {
+        return Promise.resolve({ data: paginatedEmpty })
+      }
+      return Promise.resolve({ data: [] })
+    })
   })
 
   it('renders the page heading and new task form', async () => {
@@ -73,16 +95,9 @@ describe('TasksPage', () => {
 
   it('renders a task in the list', async () => {
     mockApi.get.mockImplementation((url: string) => {
-      if (url === '/api/tasks') return Promise.resolve({ data: [emptyTask] })
+      if (url === '/api/tasks') return Promise.resolve({ data: paginatedWithTask })
       return Promise.resolve({ data: [] })
     })
-
-    // parallel Promise.all call in useEffect
-    mockApi.get.mockImplementation(() => Promise.resolve({ data: [] }))
-    mockApi.get
-      .mockResolvedValueOnce({ data: [emptyTask] }) // tasks
-      .mockResolvedValueOnce({ data: [] })           // users
-      .mockResolvedValueOnce({ data: [] })           // categories
 
     renderTasksPage()
     await waitFor(() => {
@@ -92,10 +107,13 @@ describe('TasksPage', () => {
   })
 
   it('populates assignee dropdown with users', async () => {
-    mockApi.get
-      .mockResolvedValueOnce({ data: [] })                                       // tasks
-      .mockResolvedValueOnce({ data: [{ id: 'u1', username: 'alice', email: 'a@a.com', role: 'user' }] }) // users
-      .mockResolvedValueOnce({ data: [] })                                       // categories
+    mockApi.get.mockImplementation((url: string) => {
+      if (url === '/api/users') {
+        return Promise.resolve({ data: [{ id: 'u1', username: 'alice', email: 'a@a.com', role: 'user' }] })
+      }
+      if (url === '/api/tasks') return Promise.resolve({ data: paginatedEmpty })
+      return Promise.resolve({ data: [] })
+    })
 
     renderTasksPage()
     await waitFor(() => {
@@ -105,7 +123,6 @@ describe('TasksPage', () => {
 
   it('creates a task and adds it to the list', async () => {
     const user = userEvent.setup()
-    mockApi.get.mockResolvedValue({ data: [] })
     mockApi.post.mockResolvedValue({ data: emptyTask })
 
     renderTasksPage()
@@ -126,10 +143,10 @@ describe('TasksPage', () => {
   })
 
   it('deletes a task', async () => {
-    mockApi.get
-      .mockResolvedValueOnce({ data: [emptyTask] })
-      .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: [] })
+    mockApi.get.mockImplementation((url: string) => {
+      if (url === '/api/tasks') return Promise.resolve({ data: paginatedWithTask })
+      return Promise.resolve({ data: [] })
+    })
     mockApi.delete.mockResolvedValue({})
 
     renderTasksPage()
@@ -140,6 +157,94 @@ describe('TasksPage', () => {
     await waitFor(() => {
       expect(mockApi.delete).toHaveBeenCalledWith('/api/tasks/t1')
       expect(screen.queryByText('Test Task')).not.toBeInTheDocument()
+    })
+  })
+
+  it('passes status filter and page as query params', async () => {
+    renderTasksPage()
+    await waitFor(() => {
+      expect(mockApi.get).toHaveBeenCalledWith('/api/tasks', expect.objectContaining({
+        params: expect.objectContaining({
+          status: 'todo,in_progress',
+          page: 1,
+          limit: 25,
+        }),
+      }))
+    })
+  })
+
+  it('renders filter toggle buttons for each status', async () => {
+    renderTasksPage()
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'TODO' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'IN PROGRESS' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'DONE' })).toBeInTheDocument()
+    })
+  })
+
+  it('toggles a status filter and resets to page 1', async () => {
+    const user = userEvent.setup()
+    renderTasksPage()
+    await waitFor(() => screen.getByRole('button', { name: 'DONE' }))
+
+    await user.click(screen.getByRole('button', { name: 'DONE' }))
+
+    await waitFor(() => {
+      const taskCalls = mockApi.get.mock.calls.filter(
+        ([url]: [string]) => url === '/api/tasks'
+      )
+      const lastCall = taskCalls[taskCalls.length - 1]
+      expect(lastCall[1].params.status).toContain('done')
+      expect(lastCall[1].params.page).toBe(1)
+    })
+  })
+
+  it('does not render pagination controls when total_pages is 1', async () => {
+    renderTasksPage()
+    await waitFor(() => {
+      expect(screen.queryByText(/Page \d/)).not.toBeInTheDocument()
+    })
+  })
+
+  it('renders pagination controls when total_pages > 1', async () => {
+    mockApi.get.mockImplementation((url: string) => {
+      if (url === '/api/tasks') {
+        return Promise.resolve({
+          data: { tasks: [], total: 50, page: 1, limit: 25, total_pages: 2 },
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    renderTasksPage()
+    await waitFor(() => {
+      expect(screen.getByText('Page 1 / 2')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Prev' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument()
+    })
+  })
+
+  it('advances to next page on Next click', async () => {
+    const user = userEvent.setup()
+    mockApi.get.mockImplementation((url: string) => {
+      if (url === '/api/tasks') {
+        return Promise.resolve({
+          data: { tasks: [], total: 50, page: 1, limit: 25, total_pages: 2 },
+        })
+      }
+      return Promise.resolve({ data: [] })
+    })
+
+    renderTasksPage()
+    await waitFor(() => screen.getByRole('button', { name: 'Next' }))
+    await user.click(screen.getByRole('button', { name: 'Next' }))
+
+    await waitFor(() => {
+      const taskCalls = mockApi.get.mock.calls.filter(
+        ([url]: [string]) => url === '/api/tasks'
+      )
+      const pages = taskCalls.map(([, opts]: [string, { params: { page: number } }]) => opts.params.page)
+      expect(pages).toContain(2)
     })
   })
 })

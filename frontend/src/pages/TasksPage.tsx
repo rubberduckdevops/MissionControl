@@ -44,6 +44,17 @@ interface Task {
   updated_at: string
 }
 
+interface PaginatedTasksResponse {
+  tasks: Task[]
+  total: number
+  page: number
+  limit: number
+  total_pages: number
+}
+
+const ALL_STATUSES = ['todo', 'in_progress', 'done'] as const
+type TaskStatus = typeof ALL_STATUSES[number]
+
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   todo:        { color: '#4a7aa7', label: 'TODO' },
   in_progress: { color: '#f59e0b', label: 'IN PROGRESS' },
@@ -92,6 +103,15 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Pagination
+  const [page, setPage] = useState(1)
+  const limit = 25
+  const [totalPages, setTotalPages] = useState(1)
+  const [total, setTotal] = useState(0)
+
+  // Status filter — default: show active tasks only
+  const [statusFilter, setStatusFilter] = useState<TaskStatus[]>(['todo', 'in_progress'])
+
   // Users
   const [users, setUsers] = useState<UserPublic[]>([])
 
@@ -110,21 +130,39 @@ export default function TasksPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  // Load tasks, users, and categories in parallel
+  // Load reference data once on mount
   useEffect(() => {
     Promise.all([
-      api.get<Task[]>('/api/tasks'),
       api.get<UserPublic[]>('/api/users'),
       api.get<Category[]>('/api/cti/categories'),
     ])
-      .then(([tasksRes, usersRes, catRes]) => {
-        setTasks(tasksRes.data)
+      .then(([usersRes, catRes]) => {
         setUsers(usersRes.data)
         setCategories(catRes.data)
       })
-      .catch(() => setError('Could not load page data'))
-      .finally(() => setLoading(false))
+      .catch(() => {})
   }, [])
+
+  // Reload tasks whenever page or filter changes
+  useEffect(() => {
+    setLoading(true)
+    setError('')
+    const statusParam = statusFilter.length > 0 ? statusFilter.join(',') : undefined
+    api.get<PaginatedTasksResponse>('/api/tasks', {
+      params: {
+        page,
+        limit,
+        ...(statusParam ? { status: statusParam } : {}),
+      },
+    })
+      .then((res) => {
+        setTasks(res.data.tasks)
+        setTotal(res.data.total)
+        setTotalPages(res.data.total_pages)
+      })
+      .catch(() => setError('Could not load tasks'))
+      .finally(() => setLoading(false))
+  }, [page, limit, statusFilter])
 
   // When form category changes, load types and reset deeper selections
   useEffect(() => {
@@ -148,6 +186,13 @@ export default function TasksPage() {
       .catch(() => {})
   }, [formTypeId])
 
+  const toggleStatus = (s: TaskStatus) => {
+    setPage(1)
+    setStatusFilter((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]
+    )
+  }
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreateError('')
@@ -163,7 +208,11 @@ export default function TasksPage() {
         assignee_id: assigneeId || null,
         cti,
       })
-      setTasks((prev) => [res.data, ...prev])
+      const newTask = res.data
+      if (statusFilter.length === 0 || statusFilter.includes(newTask.status as TaskStatus)) {
+        setTasks((prev) => [newTask, ...prev])
+        setTotal((prev) => prev + 1)
+      }
       setTitle('')
       setDescription('')
       setAssigneeId('')
@@ -181,6 +230,7 @@ export default function TasksPage() {
     try {
       await api.delete(`/api/tasks/${id}`)
       setTasks((prev) => prev.filter((t) => t._id !== id))
+      setTotal((prev) => prev - 1)
     } catch {
       setError('Failed to delete task')
     }
@@ -365,6 +415,41 @@ export default function TasksPage() {
           </p>
         )}
 
+        {/* Status filter bar */}
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' as const }}>
+            Filter
+          </span>
+          {ALL_STATUSES.map((s) => {
+            const cfg = STATUS_CONFIG[s]
+            const active = statusFilter.includes(s)
+            return (
+              <button
+                key={s}
+                onClick={() => toggleStatus(s)}
+                style={{
+                  fontSize: '0.65rem',
+                  letterSpacing: '0.1em',
+                  padding: '0.2rem 0.6rem',
+                  borderRadius: 3,
+                  cursor: 'pointer',
+                  color: active ? cfg.color : '#52809e',
+                  borderColor: active ? cfg.color : '#1e4470',
+                  background: active ? `${cfg.color}18` : 'transparent',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {cfg.label}
+              </button>
+            )
+          })}
+          {total > 0 && (
+            <span style={{ fontSize: '0.65rem', color: '#52809e', marginLeft: 'auto' }}>
+              {total} task{total !== 1 ? 's' : ''}
+            </span>
+          )}
+        </div>
+
         {/* Task list */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           {tasks.map((task) => {
@@ -440,6 +525,41 @@ export default function TasksPage() {
             )
           })}
         </div>
+
+        {/* Pagination controls */}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginTop: '1.5rem' }}>
+            <button
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || loading}
+              style={{
+                fontSize: '0.68rem',
+                letterSpacing: '0.08em',
+                padding: '0.25rem 0.75rem',
+                color: page <= 1 ? '#1e4470' : '#4a7aa7',
+                borderColor: page <= 1 ? '#1e4470' : '#4a7aa7',
+              }}
+            >
+              Prev
+            </button>
+            <span style={{ fontSize: '0.7rem', color: '#52809e', letterSpacing: '0.08em' }}>
+              Page {page} / {totalPages}
+            </span>
+            <button
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || loading}
+              style={{
+                fontSize: '0.68rem',
+                letterSpacing: '0.08em',
+                padding: '0.25rem 0.75rem',
+                color: page >= totalPages ? '#1e4470' : '#4a7aa7',
+                borderColor: page >= totalPages ? '#1e4470' : '#4a7aa7',
+              }}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
     </>
   )

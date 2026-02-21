@@ -1,17 +1,18 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
 use bson::{doc, to_bson};
 use chrono::Utc;
+use mongodb::options::FindOptions;
 use serde::{Deserialize, Deserializer};
 
 use crate::{
     errors::{AppError, AppResult},
     handlers::auth::{AppState, Claims},
     models::cti::CtiSelection,
-    models::task::{Task, TaskNote},
+    models::task::{PaginatedTasksResponse, Task, TaskNote, TaskQuery},
 };
 
 /// Custom deserializer that wraps a present field (even if null) in `Some`.
@@ -58,10 +59,40 @@ pub struct AddNoteRequest {
 pub async fn list_tasks(
     axum::Extension(_claims): axum::Extension<Claims>,
     State(state): State<AppState>,
-) -> AppResult<Json<Vec<Task>>> {
+    Query(params): Query<TaskQuery>,
+) -> AppResult<Json<PaginatedTasksResponse>> {
+    if params.limit == 0 || params.limit > 100 {
+        return Err(AppError::BadRequest(
+            "limit must be between 1 and 100".to_string(),
+        ));
+    }
+    if params.page == 0 {
+        return Err(AppError::BadRequest("page must be >= 1".to_string()));
+    }
+
+    let statuses = params.parsed_statuses().map_err(AppError::BadRequest)?;
+
+    let filter = match statuses {
+        None => doc! {},
+        Some(list) => doc! { "status": { "$in": list } },
+    };
+
     let collection = state.db.collection::<Task>("tasks");
+
+    let total = collection
+        .count_documents(filter.clone(), None)
+        .await
+        .map_err(AppError::Database)?;
+
+    let skip = (params.page - 1) * params.limit;
+    let options = FindOptions::builder()
+        .skip(skip)
+        .limit(params.limit as i64)
+        .sort(doc! { "created_at": -1 })
+        .build();
+
     let mut cursor = collection
-        .find(None, None)
+        .find(filter, options)
         .await
         .map_err(AppError::Database)?;
 
@@ -69,7 +100,20 @@ pub async fn list_tasks(
     while cursor.advance().await.map_err(AppError::Database)? {
         tasks.push(cursor.deserialize_current().map_err(AppError::Database)?);
     }
-    Ok(Json(tasks))
+
+    let total_pages = if total == 0 {
+        1
+    } else {
+        (total + params.limit - 1) / params.limit
+    };
+
+    Ok(Json(PaginatedTasksResponse {
+        tasks,
+        total,
+        page: params.page,
+        limit: params.limit,
+        total_pages,
+    }))
 }
 
 pub async fn create_task(
