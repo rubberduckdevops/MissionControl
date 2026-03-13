@@ -15,7 +15,7 @@ RUN touch src/main.rs && cargo build --release
 
 # --- Runtime stage ---
 FROM amazonlinux:2023
-RUN dnf install -y openssl ca-certificates && dnf clean all
+RUN dnf install -y openssl ca-certificates shadow-utils && dnf clean all
 
 RUN groupadd --system app && useradd --system --gid app --no-create-home app
 
