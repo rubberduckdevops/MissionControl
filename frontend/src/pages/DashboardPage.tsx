@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
@@ -30,6 +31,18 @@ interface Task {
   assignee_id: string | null
 }
 
+interface Feed {
+  _id: string
+  name: string
+}
+
+interface FeedItem {
+  title: string
+  link: string
+  published: string | null
+  sourceName: string
+}
+
 function wmoDescription(code: number): string {
   if (code === 0) return 'Clear'
   if (code <= 3) return 'Partly Cloudy'
@@ -49,6 +62,8 @@ export default function DashboardPage() {
   const [clock, setClock] = useState({ time: '', date: '' })
   const [weather, setWeather] = useState<WeatherState>({ temp: 0, condition: '', windspeed: 0, status: 'loading' })
   const [myTasks, setMyTasks] = useState<Task[]>([])
+  const [feedItems, setFeedItems] = useState<FeedItem[]>([])
+  const [feedsLoading, setFeedsLoading] = useState(true)
 
   useEffect(() => {
     api
@@ -64,6 +79,34 @@ export default function DashboardPage() {
       .then((res) => setMyTasks(res.data.tasks.filter((t) => t.assignee_id === user.id)))
       .catch(() => {})
   }, [user])
+
+  useEffect(() => {
+    setFeedsLoading(true)
+    api
+      .get<Feed[]>('/api/feeds')
+      .then(async (res) => {
+        const feeds = res.data.slice(0, 3)
+        const fetched = await Promise.allSettled(
+          feeds.map((feed) =>
+            api
+              .get<{ items: { title: string; link: string; published: string | null }[] }>(`/api/feeds/${feed._id}/items`)
+              .then((r) =>
+                r.data.items.slice(0, 3).map((item) => ({ ...item, sourceName: feed.name }))
+              )
+          )
+        )
+        const all: FeedItem[] = fetched
+          .flatMap((r) => (r.status === 'fulfilled' ? r.value : []))
+          .sort((a, b) => {
+            if (!a.published) return 1
+            if (!b.published) return -1
+            return new Date(b.published).getTime() - new Date(a.published).getTime()
+          })
+        setFeedItems(all)
+      })
+      .catch(() => {})
+      .finally(() => setFeedsLoading(false))
+  }, [])
 
   useEffect(() => {
     const tick = () => {
@@ -175,6 +218,11 @@ export default function DashboardPage() {
 
         {/* Row 3: My active tasks */}
         <MyTasksWidget tasks={myTasks} />
+
+        {/* Row 4: Intelligence feed headlines */}
+        <div style={{ marginTop: '1rem' }}>
+          <FeedWidget items={feedItems} loading={feedsLoading} />
+        </div>
       </div>
     </>
   )
@@ -358,6 +406,79 @@ function MyTasksWidget({ tasks }: { tasks: Task[] }) {
                 {STATUS_LABEL[t.status] ?? t.status.toUpperCase()}
               </span>
               <span style={{ color: '#c8d8e8', fontSize: '0.82rem' }}>{t.title}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
+
+function FeedWidget({ items, loading }: { items: FeedItem[]; loading: boolean }) {
+  return (
+    <div
+      style={{
+        background: '#132035',
+        border: '1px solid #1e4470',
+        borderLeft: '3px solid #00d4ff',
+        borderRadius: 4,
+        padding: '1.25rem',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+        <div style={{ fontSize: '0.65rem', letterSpacing: '0.2em', color: '#4a7aa7', textTransform: 'uppercase' }}>
+          Intelligence Headlines
+        </div>
+        <Link
+          to="/feeds"
+          style={{ fontSize: '0.65rem', letterSpacing: '0.1em', color: '#4a7aa7', textDecoration: 'none', textTransform: 'uppercase' }}
+        >
+          Manage →
+        </Link>
+      </div>
+      {loading && (
+        <p style={{ color: '#4a7aa7', fontSize: '0.75rem', letterSpacing: '0.1em', margin: 0 }}>LOADING…</p>
+      )}
+      {!loading && items.length === 0 && (
+        <p style={{ color: '#52809e', fontSize: '0.75rem', letterSpacing: '0.08em', margin: 0 }}>
+          NO FEEDS CONFIGURED — <Link to="/feeds" style={{ color: '#4a7aa7' }}>add feeds on the Intelligence Feeds page</Link>
+        </p>
+      )}
+      {!loading && items.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
+          {items.map((item, i) => (
+            <div
+              key={i}
+              style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', padding: '0.45rem 0', borderBottom: '1px solid #1a2f4a' }}
+            >
+              <a
+                href={item.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ color: '#c8d8e8', fontSize: '0.82rem', textDecoration: 'none', flex: 1 }}
+                onMouseOver={(e) => (e.currentTarget.style.color = '#00d4ff')}
+                onMouseOut={(e) => (e.currentTarget.style.color = '#c8d8e8')}
+              >
+                {item.title || '(no title)'}
+              </a>
+              <span style={{ color: '#4a7aa7', fontSize: '0.65rem', letterSpacing: '0.05em', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {item.sourceName}
+              </span>
+              {item.published && (
+                <span style={{ color: '#52809e', fontSize: '0.62rem', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                  {relativeTime(item.published)}
+                </span>
+              )}
             </div>
           ))}
         </div>

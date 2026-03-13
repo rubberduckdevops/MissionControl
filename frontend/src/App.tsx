@@ -6,6 +6,7 @@ import TasksPage from './pages/TasksPage'
 import TaskDetailPage from './pages/TaskDetailPage'
 import CtiPage from './pages/CtiPage'
 import AdminPage from './pages/AdminPage'
+import FeedsPage from './pages/FeedsPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
 
@@ -53,6 +54,14 @@ export default function App() {
             <AdminRoute>
               <AdminPage />
             </AdminRoute>
+          }
+        />
+        <Route
+          path="/feeds"
+          element={
+            <PrivateRoute>
+              <FeedsPage />
+            </PrivateRoute>
           }
         />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />

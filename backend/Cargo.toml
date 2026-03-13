@@ -28,3 +28,5 @@ thiserror = "1"
 anyhow = "1"
 rand_core = { version = "0.6", features = ["std"] }
 constant_time_eq = "0.3"
+reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+feed-rs = "2"

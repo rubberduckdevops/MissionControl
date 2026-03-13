@@ -43,6 +43,7 @@ use crate::{
             list_categories, list_items, list_types,
         },
         dashboard::get_dashboard,
+        feeds::{add_feed, delete_feed, get_feed_items, list_feeds},
         health::health_check,
         tasks::{add_note, create_task, delete_note, delete_task, get_task, list_tasks, update_task},
         users::list_users,
@@ -102,6 +103,9 @@ pub fn build_router(pool: Db) -> Router {
         .route("/api/cti/types/:id", delete(delete_type))
         .route("/api/cti/items", get(list_items).post(create_item))
         .route("/api/cti/items/:id", delete(delete_item))
+        .route("/api/feeds", get(list_feeds).post(add_feed))
+        .route("/api/feeds/:id", delete(delete_feed))
+        .route("/api/feeds/:id/items", get(get_feed_items))
         .merge(admin_routes)
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
