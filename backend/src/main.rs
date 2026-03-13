@@ -2,7 +2,7 @@ use anyhow::Result;
 use dotenvy::dotenv;
 use mongodb::{Client, IndexModel, options::IndexOptions};
 use bson::doc;
-use std::env;
+use std::{env, net::SocketAddr};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod config;
@@ -49,6 +49,6 @@ async fn main() -> Result<()> {
     let addr = format!("0.0.0.0:{port}");
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     tracing::info!("Server listening on {addr}");
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
 }
