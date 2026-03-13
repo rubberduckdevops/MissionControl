@@ -20,6 +20,7 @@ pub struct RegisterRequest {
     pub email: String,
     pub username: String,
     pub password: String,
+    pub invite_code: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -52,6 +53,10 @@ pub async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> AppResult<Json<AuthResponse>> {
+    if payload.invite_code != state.config.invite_code {
+        return Err(AppError::Forbidden);
+    }
+
     let argon2 = Argon2::default();
     let salt = SaltString::generate(&mut OsRng);
     let password_hash = argon2

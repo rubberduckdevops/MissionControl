@@ -8,6 +8,7 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -16,10 +17,17 @@ export default function RegisterPage() {
     setError('')
     setLoading(true)
     try {
-      await register(email, username, password)
+      await register(email, username, password, inviteCode)
       navigate('/dashboard')
-    } catch {
-      setError('REGISTRATION FAILED — email or username already taken')
+    } catch (err: any) {
+      const msg = err?.response?.data?.error
+      if (err?.response?.status === 403) {
+        setError('REGISTRATION FAILED — invalid invite code')
+      } else if (msg) {
+        setError(`REGISTRATION FAILED — ${msg}`)
+      } else {
+        setError('REGISTRATION FAILED — email or username already taken')
+      }
     } finally {
       setLoading(false)
     }
@@ -131,6 +139,19 @@ export default function RegisterPage() {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   autoComplete="new-password"
+                  placeholder="••••••••"
+                />
+              </label>
+              <label>
+                <span style={{ fontSize: '0.68rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' }}>
+                  Invite Code
+                </span>
+                <input
+                  type="password"
+                  value={inviteCode}
+                  onChange={(e) => setInviteCode(e.target.value)}
+                  required
+                  autoComplete="off"
                   placeholder="••••••••"
                 />
               </label>

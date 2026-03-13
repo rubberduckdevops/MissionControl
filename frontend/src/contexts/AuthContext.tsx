@@ -17,7 +17,7 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>
-  register: (email: string, username: string, password: string) => Promise<void>
+  register: (email: string, username: string, password: string, inviteCode: string) => Promise<void>
   logout: () => void
 }
 
@@ -53,8 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ user, token, loading: false })
   }
 
-  const register = async (email: string, username: string, password: string) => {
-    const res = await api.post('/api/auth/register', { email, username, password })
+  const register = async (email: string, username: string, password: string, inviteCode: string) => {
+    const res = await api.post('/api/auth/register', { email, username, password, invite_code: inviteCode })
     const { token, user } = res.data
     localStorage.setItem('token', token)
     setState({ user, token, loading: false })
