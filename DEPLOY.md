@@ -94,10 +94,28 @@ FRONTEND_ORIGIN=https://mc.rubberduck.work
 
 ---
 
-## 6. Start the Stack
+## 6. First-time GHCR Setup
+
+After your first `git push` to `main`, GitHub Actions builds and pushes both images to GHCR.
+
+Confirm the packages exist at `https://github.com/<username>?tab=packages` — you should see `missioncontrol-backend` and `missioncontrol-frontend`.
+
+Since the source repo is public, GHCR packages inherit public visibility automatically — no auth token is needed on the server to pull them.
+
+Also set `GHCR_OWNER` in your `.env` to your GitHub username or org:
+
+```
+GHCR_OWNER=your-github-username
+```
+
+---
+
+## 7. Start the Stack
 
 ```bash
-COMPOSE_BAKE=false sudo docker compose up -d --build
+# Pull pre-built images from GHCR (no build on server)
+sudo docker compose pull
+sudo docker compose up -d
 ```
 
 Verify containers are running:
@@ -108,7 +126,7 @@ sudo docker compose ps
 
 ---
 
-## 7. Verify
+## 8. Verify
 
 ```bash
 # TLS + correlation ID header
@@ -125,7 +143,15 @@ done
 
 ---
 
-## 8. Ongoing
+## 9. Ongoing
+
+### Subsequent deploys
+
+```bash
+git push                          # triggers GitHub Actions build
+# Wait ~3 minutes for the build to complete, then on the server:
+sudo docker compose pull && sudo docker compose up -d
+```
 
 ### Docker log rotation
 

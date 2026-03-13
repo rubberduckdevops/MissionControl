@@ -17,6 +17,7 @@ services:
       retries: 5
 
   backend:
+    image: ghcr.io/${GHCR_OWNER}/missioncontrol-backend:latest
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -35,6 +36,7 @@ services:
         condition: service_healthy
 
   frontend:
+    image: ghcr.io/${GHCR_OWNER}/missioncontrol-frontend:latest
     build:
       context: ./frontend
       dockerfile: Dockerfile
