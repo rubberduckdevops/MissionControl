@@ -1,17 +1,35 @@
 use std::sync::Arc;
 
 use axum::{
+    http::Request,
     middleware,
     routing::{delete, get, post, put},
     Router,
 };
 use axum::http::header::HeaderName;
-use tower_governor::{governor::GovernorConfigBuilder, GovernorLayer};
+use tower_governor::{
+    governor::GovernorConfigBuilder,
+    key_extractor::SmartIpKeyExtractor,
+    GovernorLayer,
+};
 use tower_http::{
     cors::CorsLayer,
-    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
+    request_id::{MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer},
     trace::TraceLayer,
 };
+use uuid::Uuid;
+
+/// Always generates a fresh server-side UUID, ignoring any client-supplied header.
+/// Prevents log injection via forged X-Correlation-ID values.
+#[derive(Clone, Default)]
+struct AlwaysMakeRequestUuid;
+
+impl MakeRequestId for AlwaysMakeRequestUuid {
+    fn make_request_id<B>(&mut self, _request: &Request<B>) -> Option<RequestId> {
+        let id = Uuid::new_v4().to_string().parse().ok()?;
+        Some(RequestId::new(id))
+    }
+}
 
 use crate::{
     config::AppConfig,
@@ -37,11 +55,14 @@ pub fn build_router(pool: Db) -> Router {
         config: AppConfig::from_env(),
     };
 
-    // Rate limit: 10 req/min per IP (1 token/6s, burst of 10)
+    // Rate limit: 10 req/min per IP (1 token/6s, burst of 10).
+    // SmartIpKeyExtractor prefers X-Forwarded-For when present (reverse proxy deployments)
+    // and falls back to the TCP peer address for direct connections.
     let governor_conf = Arc::new(
         GovernorConfigBuilder::default()
             .per_second(6)
             .burst_size(10)
+            .key_extractor(SmartIpKeyExtractor)
             .finish()
             .unwrap(),
     );
@@ -88,7 +109,7 @@ pub fn build_router(pool: Db) -> Router {
         .merge(auth_routes)
         .merge(protected_routes)
         .layer(PropagateRequestIdLayer::new(x_correlation_id.clone()))
-        .layer(SetRequestIdLayer::new(x_correlation_id, MakeRequestUuid))
+        .layer(SetRequestIdLayer::new(x_correlation_id, AlwaysMakeRequestUuid))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state)
