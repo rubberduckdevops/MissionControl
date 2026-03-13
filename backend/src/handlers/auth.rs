@@ -2,6 +2,7 @@ use argon2::{
     password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
 };
+use constant_time_eq::constant_time_eq;
 use axum::{extract::State, Json};
 use bson::doc;
 use chrono::{Duration, Utc};
@@ -15,12 +16,23 @@ use crate::{
     models::user::{User, UserPublic},
 };
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct RegisterRequest {
     pub email: String,
     pub username: String,
     pub password: String,
     pub invite_code: String,
+}
+
+impl std::fmt::Debug for RegisterRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RegisterRequest")
+            .field("email", &self.email)
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .field("invite_code", &"[REDACTED]")
+            .finish()
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -53,7 +65,7 @@ pub async fn register(
     State(state): State<AppState>,
     Json(payload): Json<RegisterRequest>,
 ) -> AppResult<Json<AuthResponse>> {
-    if payload.invite_code != state.config.invite_code {
+    if !constant_time_eq(payload.invite_code.as_bytes(), state.config.invite_code.as_bytes()) {
         return Err(AppError::Forbidden);
     }
 

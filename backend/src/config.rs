@@ -1,5 +1,7 @@
 use std::env;
 
+// Debug is intentionally NOT derived to prevent jwt_secret and invite_code
+// from appearing in logs or panic output.
 #[derive(Clone)]
 pub struct AppConfig {
     pub jwt_secret: String,
