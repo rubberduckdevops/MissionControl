@@ -72,6 +72,7 @@ Renewal is handled automatically by the systemd timer Certbot installs (`certbot
 
 ```bash
 cp .env.example .env
+chmod 600 .env
 nano .env
 ```
 
@@ -88,7 +89,7 @@ openssl rand -hex 32
 Set `FRONTEND_ORIGIN` to your public domain (used for CORS):
 
 ```
-FRONTEND_ORIGIN=https://example.com
+FRONTEND_ORIGIN=https://mc.rubberduck.work
 ```
 
 ---
@@ -111,12 +112,12 @@ sudo docker compose ps
 
 ```bash
 # TLS + correlation ID header
-curl -sv https://example.com/health 2>&1 | grep -i correlation
+curl -sv https://mc.rubberduck.work/health 2>&1 | grep -i correlation
 
 # Rate limiting on auth endpoints (expect 10× 401 then 2× 429)
 for i in $(seq 1 12); do
   curl -s -o /dev/null -w "%{http_code}\n" \
-    -X POST https://example.com/api/auth/login \
+    -X POST https://mc.rubberduck.work/api/auth/login \
     -H "Content-Type: application/json" \
     -d '{"email":"x@x.com","password":"wrong"}'
 done
@@ -151,11 +152,58 @@ sed -i 's/apply_updates = no/apply_updates = yes/' /etc/dnf/automatic.conf
 systemctl enable --now dnf-automatic.timer
 ```
 
-### SSH brute force protection
+### SSH + nginx brute force protection
 
 ```bash
 dnf install -y fail2ban
 systemctl enable --now fail2ban
 ```
 
-The default `fail2ban` config protects SSH out of the box.
+The default config protects SSH. Add nginx jails to also ban IPs that repeatedly
+hit 401 (bad credentials) or 429 (rate-limited) on the auth endpoints.
+
+**1. Create a custom filter for 429 responses** (`/etc/fail2ban/filter.d/nginx-429.conf`):
+
+```ini
+[Definition]
+failregex = ^<HOST> - \S+ \[.*\] "POST /api/auth/\S+ HTTP/\d\.\d" 429
+ignoreregex =
+```
+
+**2. Create the jail config** (`/etc/fail2ban/jail.d/nginx.conf`):
+
+```ini
+# Ban IPs that get 5 failed logins (401) within 10 minutes for 1 hour
+[nginx-http-auth]
+enabled  = true
+port     = http,https
+filter   = nginx-http-auth
+logpath  = /var/log/nginx/access.log
+maxretry = 5
+findtime = 600
+bantime  = 3600
+
+# Ban IPs that are still hammering after hitting the rate limit (429)
+[nginx-429]
+enabled  = true
+port     = http,https
+filter   = nginx-429
+logpath  = /var/log/nginx/access.log
+maxretry = 3
+findtime = 600
+bantime  = 86400
+```
+
+`nginx-http-auth` is a built-in fail2ban filter. The `nginx-429` filter is the
+custom one created above — 3 rate-limited responses within 10 minutes earns a
+24-hour ban.
+
+**3. Reload fail2ban:**
+
+```bash
+systemctl reload fail2ban
+
+# Verify jails are active
+fail2ban-client status
+fail2ban-client status nginx-429
+```

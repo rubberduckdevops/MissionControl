@@ -17,11 +17,14 @@ RUN touch src/main.rs && cargo build --release
 FROM amazonlinux:2023
 RUN dnf install -y openssl ca-certificates && dnf clean all
 
+RUN groupadd --system app && useradd --system --gid app --no-create-home app
+
 WORKDIR /app
 COPY --from=builder /app/target/release/missoncontrol ./missoncontrol
 COPY entrypoint.sh ./entrypoint.sh
 COPY sidecar.sh ./sidecar.sh
 RUN chmod +x ./entrypoint.sh ./sidecar.sh
 
+USER app
 EXPOSE 8080
 ENTRYPOINT ["/app/entrypoint.sh"]

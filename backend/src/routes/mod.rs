@@ -17,6 +17,7 @@ use tower_http::{
     request_id::{MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer},
     trace::TraceLayer,
 };
+use axum::http::{HeaderValue, Method, header};
 use uuid::Uuid;
 
 /// Always generates a fresh server-side UUID, ignoring any client-supplied header.
@@ -110,7 +111,16 @@ pub fn build_router(pool: Db) -> Router {
         .merge(protected_routes)
         .layer(PropagateRequestIdLayer::new(x_correlation_id.clone()))
         .layer(SetRequestIdLayer::new(x_correlation_id, AlwaysMakeRequestUuid))
-        .layer(CorsLayer::permissive())
+        .layer(
+            CorsLayer::new()
+                .allow_origin(
+                    state.config.frontend_origin
+                        .parse::<HeaderValue>()
+                        .expect("Invalid FRONTEND_ORIGIN"),
+                )
+                .allow_methods([Method::GET, Method::POST, Method::PUT, Method::DELETE])
+                .allow_headers([header::AUTHORIZATION, header::CONTENT_TYPE]),
+        )
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
