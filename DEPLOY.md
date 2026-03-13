@@ -126,7 +126,19 @@ sudo docker compose ps
 
 ---
 
-## 8. Verify
+## 8. Create Admin User
+
+Register your account through the UI first, then promote it:
+
+```bash
+./scripts/make-admin.sh you@example.com
+```
+
+The script reads credentials from `.env` automatically and connects to the running MongoDB container. Re-run it any time you need to promote another user.
+
+---
+
+## 9. Verify
 
 ```bash
 # TLS + correlation ID header
@@ -143,7 +155,7 @@ done
 
 ---
 
-## 9. Ongoing
+## 10. Ongoing
 
 ### Subsequent deploys
 

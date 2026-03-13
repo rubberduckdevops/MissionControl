@@ -1,13 +1,13 @@
 # MissonControl
 
-A full-stack web application with user authentication and a real-time dashboard.
+A full-stack threat intelligence and task management platform.
 
 | Layer | Technology |
 |-------|-----------|
 | Backend | Rust + [Axum](https://github.com/tokio-rs/axum) |
-| Frontend | React 18 + TypeScript + Vite |
-| Database | PostgreSQL 16 |
-| Auth | JWT (RS256 via `jsonwebtoken`) + Argon2id password hashing |
+| Frontend | React 18 + TypeScript + Vite + Tailwind CSS |
+| Database | MongoDB 7 |
+| Auth | JWT (HS256 via `jsonwebtoken`) + Argon2id password hashing |
 | Containerisation | Docker + Docker Compose |
 
 ---
@@ -23,7 +23,7 @@ docker-compose up --build
 
 # Frontend → http://localhost:3000
 # Backend  → http://localhost:8080
-# Postgres → localhost:5432
+# MongoDB  → localhost:27017
 ```
 
 > On first run Docker will compile the Rust binary (~2–5 min). Subsequent builds are cached.
@@ -34,55 +34,63 @@ docker-compose up --build
 
 ```
 MissonControl/
-├── backend/                    # Rust/Axum API server
+├── backend/
 │   ├── Cargo.toml
 │   ├── Dockerfile
-│   ├── migrations/             # SQLx migration files (run at startup)
-│   │   └── 20240101000000_create_users.sql
+│   ├── entrypoint.sh           # Starts backend + sidecar health monitor
 │   └── src/
-│       ├── main.rs             # Entry point — pool, migrations, server
+│       ├── main.rs             # Entry point — DB connection, indexes, server
 │       ├── config.rs           # AppConfig (loaded from env vars)
 │       ├── errors.rs           # AppError enum + IntoResponse impl
-│       ├── db/mod.rs           # Db type alias (PgPool)
+│       ├── db/mod.rs           # Db type alias (mongodb::Database)
 │       ├── models/
-│       │   └── user.rs         # User + UserPublic structs
+│       │   ├── user.rs         # User + UserPublic structs
+│       │   ├── task.rs         # Task, TaskNote, TaskQuery, PaginatedTasksResponse
+│       │   ├── cti.rs          # CtiCategory, CtiType, CtiItem, CtiSelection
+│       │   └── artifacts.rs
 │       ├── handlers/
-│       │   ├── auth.rs         # register / login / me handlers + AppState
+│       │   ├── auth.rs         # register / login / me + AppState + Claims
+│       │   ├── admin.rs        # Admin user management handlers
+│       │   ├── tasks.rs        # Task CRUD + notes
+│       │   ├── cti.rs          # CTI taxonomy CRUD
+│       │   ├── users.rs        # list users
 │       │   ├── dashboard.rs    # dashboard handler
 │       │   └── health.rs       # GET /health
 │       ├── middleware/
-│       │   └── auth.rs         # require_auth JWT middleware
-│       └── routes/mod.rs       # Router assembly
+│       │   ├── auth.rs         # require_auth — validates JWT, injects Claims
+│       │   └── admin.rs        # require_admin — checks role == "admin"
+│       └── routes/mod.rs       # Router assembly + CORS + rate limiting
 │
-├── frontend/                   # React SPA
+├── frontend/
 │   ├── package.json
 │   ├── vite.config.ts          # Dev proxy: /api → localhost:8080
-│   ├── tsconfig.json
 │   ├── Dockerfile
 │   ├── nginx.conf              # Prod: serves SPA + proxies /api → backend
-│   ├── index.html
 │   └── src/
 │       ├── main.tsx            # React root + AuthProvider wrapper
-│       ├── App.tsx             # Router + route definitions
-│       ├── index.css           # Global styles
+│       ├── App.tsx             # React Router v6 routes
 │       ├── contexts/
-│       │   └── AuthContext.tsx # Auth state, token persistence, actions
+│       │   └── AuthContext.tsx # Auth state, JWT in localStorage, actions
 │       ├── services/
 │       │   └── api.ts          # Axios instance with Bearer token interceptor
 │       ├── components/
-│       │   ├── Navbar.tsx      # Top nav with logout
-│       │   └── PrivateRoute.tsx # Redirect unauthenticated users to /login
+│       │   ├── Navbar.tsx
+│       │   ├── PrivateRoute.tsx
+│       │   └── AdminRoute.tsx
 │       └── pages/
 │           ├── LoginPage.tsx
 │           ├── RegisterPage.tsx
-│           └── DashboardPage.tsx
+│           ├── DashboardPage.tsx
+│           ├── TasksPage.tsx
+│           ├── TaskDetailPage.tsx
+│           ├── CtiPage.tsx
+│           └── AdminPage.tsx
 │
-├── infra/
-│   └── postgres/
-│       └── init.sql            # Runs once on DB creation (enables uuid-ossp)
+├── scripts/
+│   └── make-admin.sh           # Promotes a registered user to admin role
 │
-├── docker-compose.yml          # Orchestrates postgres + backend + frontend
-├── .env.example                # Environment variable template
+├── docker-compose.yml
+├── .env.example
 └── README.md
 ```
 
@@ -92,82 +100,39 @@ MissonControl/
 
 ### Public
 
-| Method | Path | Body | Response |
-|--------|------|------|----------|
-| `GET` | `/health` | — | `{ status, service }` |
-| `POST` | `/api/auth/register` | `{ email, username, password }` | `{ token, user }` |
-| `POST` | `/api/auth/login` | `{ email, password }` | `{ token, user }` |
+| Method | Path | Body | Description |
+|--------|------|------|-------------|
+| `GET` | `/health` | — | Health check |
+| `POST` | `/api/auth/register` | `{ email, username, password, invite_code }` | Register a new user |
+| `POST` | `/api/auth/login` | `{ email, password }` | Login |
+
+> Registration requires a valid `invite_code` matching the `INVITE_CODE` env var.
 
 ### Protected (requires `Authorization: Bearer <token>`)
 
-| Method | Path | Response |
-|--------|------|----------|
-| `GET` | `/api/auth/me` | `UserPublic` object |
-| `GET` | `/api/dashboard` | `{ message, user_id, stats }` |
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/auth/me` | Current user |
+| `GET` | `/api/dashboard` | Dashboard stats |
+| `GET` | `/api/users` | List all users |
+| `GET` / `POST` | `/api/tasks` | List (paginated + filtered) / create tasks |
+| `GET` / `PUT` / `DELETE` | `/api/tasks/:id` | Get / update / delete task |
+| `POST` | `/api/tasks/:id/notes` | Add note to task |
+| `DELETE` | `/api/tasks/:id/notes/:note_id` | Delete note |
+| `GET` / `POST` | `/api/cti/categories` | List / create CTI categories |
+| `DELETE` | `/api/cti/categories/:id` | Delete CTI category |
+| `GET` / `POST` | `/api/cti/types` | List / create CTI types |
+| `DELETE` | `/api/cti/types/:id` | Delete CTI type |
+| `GET` / `POST` | `/api/cti/items` | List / create CTI items |
+| `DELETE` | `/api/cti/items/:id` | Delete CTI item |
 
-#### Example: Register
+### Admin only
 
-```bash
-curl -X POST http://localhost:8080/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"email":"alice@example.com","username":"alice","password":"secret123"}'
-```
-
-```json
-{
-  "token": "<jwt>",
-  "user": {
-    "id": "...",
-    "email": "alice@example.com",
-    "username": "alice",
-    "role": "user",
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-}
-```
-
-#### Example: Dashboard
-
-```bash
-curl http://localhost:8080/api/dashboard \
-  -H "Authorization: Bearer <token>"
-```
-
-```json
-{
-  "message": "Welcome, alice@example.com!",
-  "user_id": "...",
-  "stats": { "total_users": 1 }
-}
-```
-
----
-
-## Data Models
-
-### `users` table
-
-| Column | Type | Constraints | Notes |
-|--------|------|------------|-------|
-| `id` | `UUID` | PK | Auto-generated via `uuid_generate_v4()` |
-| `email` | `TEXT` | NOT NULL, UNIQUE | User's email address |
-| `username` | `TEXT` | NOT NULL, UNIQUE | Display name |
-| `password_hash` | `TEXT` | NOT NULL | Argon2id hash (never returned by API) |
-| `role` | `TEXT` | NOT NULL, DEFAULT `'user'` | `'user'` or `'admin'` |
-| `created_at` | `TIMESTAMPTZ` | NOT NULL, DEFAULT NOW() | Creation timestamp |
-| `updated_at` | `TIMESTAMPTZ` | NOT NULL, DEFAULT NOW() | Last update timestamp |
-
-### `UserPublic` (API response shape)
-
-```ts
-{
-  id: string        // UUID
-  email: string
-  username: string
-  role: string
-  created_at: string  // ISO 8601
-}
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/admin/users` | List all users |
+| `PUT` / `DELETE` | `/api/admin/users/:id` | Update / delete user |
+| `PUT` | `/api/admin/users/:id/role` | Change user role |
 
 ---
 
@@ -175,10 +140,13 @@ curl http://localhost:8080/api/dashboard \
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `POSTGRES_USER` | Yes | PostgreSQL username |
-| `POSTGRES_PASSWORD` | Yes | PostgreSQL password |
-| `POSTGRES_DB` | Yes | PostgreSQL database name |
-| `JWT_SECRET` | Yes | Secret key for signing JWTs (use a long random string in production) |
+| `MONGO_USER` | Yes | MongoDB username |
+| `MONGO_PASSWORD` | Yes | MongoDB password |
+| `MONGO_DB` | Yes | MongoDB database name |
+| `JWT_SECRET` | Yes | Secret for signing JWTs (min 32 bytes in production) |
+| `FRONTEND_ORIGIN` | Yes | Allowed CORS origin, e.g. `https://mc.example.com` |
+| `INVITE_CODE` | Yes | Required to register new users — share out-of-band |
+| `GHCR_OWNER` | Yes | GitHub username/org for pulling pre-built images |
 
 ---
 
@@ -188,13 +156,14 @@ curl http://localhost:8080/api/dashboard \
 
 ```bash
 cd backend
-
-# Requires a running Postgres instance
-export DATABASE_URL=postgres://missoncontrol:changeme@localhost:5432/missoncontrol
+export MONGODB_URI=mongodb://missoncontrol:changeme@localhost:27017/missoncontrol
+export MONGODB_DB=missoncontrol
 export JWT_SECRET=dev-secret
+export INVITE_CODE=dev-invite
+export FRONTEND_ORIGIN=http://localhost:5173
 
-cargo run
-# Server starts on http://localhost:8080
+cargo run           # starts on :8080
+cargo test          # run all tests
 ```
 
 ### Frontend
@@ -202,17 +171,20 @@ cargo run
 ```bash
 cd frontend
 npm install
-npm run dev
-# Dev server starts on http://localhost:5173
-# /api requests are proxied to http://localhost:8080
+npm run dev         # starts on :5173, proxies /api → localhost:8080
+npm test            # run tests once
+npm run test:watch  # watch mode
+npm run build       # tsc + vite build
 ```
 
 ---
 
 ## Architecture Notes
 
-- **Migrations**: SQLx migrations in `backend/migrations/` run automatically at backend startup via `sqlx::migrate!()`.
-- **Auth flow**: JWT tokens are issued on login/register (24h expiry), stored in `localStorage`, and attached to requests by the Axios interceptor. The `require_auth` middleware validates them server-side on every protected route.
-- **Password security**: Argon2id (OWASP recommended) with a unique salt per user.
-- **CORS**: Currently set to permissive for development. Restrict `CorsLayer` to your domain in production.
-- **Docker networking**: The frontend Nginx container proxies `/api/` to the `backend` service by Docker service name — no hardcoded IPs needed.
+- **Auth flow**: JWT tokens issued on login/register (24h expiry), stored in `localStorage`, attached by the Axios interceptor. `require_auth` middleware validates them on every protected route.
+- **Password security**: Argon2id with a unique salt per user.
+- **Rate limiting**: Auth endpoints are limited to 10 req/min per IP via `tower-governor`.
+- **CORS**: Restricted to `FRONTEND_ORIGIN` — set this to your public domain in production.
+- **Request IDs**: Every request gets a server-generated `X-Correlation-ID` UUID (client-supplied values are ignored to prevent log injection).
+- **Task statuses**: `todo`, `in_progress`, `done`
+- **User roles**: `user`, `admin`
