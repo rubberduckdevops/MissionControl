@@ -262,22 +262,20 @@ export default function TaskDetailPage() {
   return (
     <Layout>
       <ContentLayout
+        breadcrumbs={
+          <BreadcrumbGroup
+            items={[
+              { text: 'Tasks', href: '/tasks' },
+              { text: task.title, href: '#' },
+            ]}
+            onFollow={(e) => {
+              e.preventDefault()
+              navigate(e.detail.href === '#' ? `/tasks/${id}` : e.detail.href)
+            }}
+          />
+        }
         header={
-          <Header
-            variant="h1"
-            breadcrumbs={
-              <BreadcrumbGroup
-                items={[
-                  { text: 'Tasks', href: '/tasks' },
-                  { text: task.title, href: '#' },
-                ]}
-                onFollow={(e) => {
-                  e.preventDefault()
-                  navigate(e.detail.href === '#' ? `/tasks/${id}` : e.detail.href)
-                }}
-              />
-            }
-          >
+          <Header variant="h1">
             {task.title}
           </Header>
         }
