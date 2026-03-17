@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import Navbar from '../components/Navbar'
+import { Link as RouterLink } from 'react-router-dom'
+import ContentLayout from '@cloudscape-design/components/content-layout'
+import Header from '@cloudscape-design/components/header'
+import Container from '@cloudscape-design/components/container'
+import ColumnLayout from '@cloudscape-design/components/column-layout'
+import Box from '@cloudscape-design/components/box'
+import SpaceBetween from '@cloudscape-design/components/space-between'
+import Table from '@cloudscape-design/components/table'
+import StatusIndicator from '@cloudscape-design/components/status-indicator'
+import Link from '@cloudscape-design/components/link'
+import Alert from '@cloudscape-design/components/alert'
+import Spinner from '@cloudscape-design/components/spinner'
+import Layout from '../components/Layout'
 import api from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 
@@ -53,6 +64,23 @@ function wmoDescription(code: number): string {
   if (code <= 82) return 'Showers'
   if (code <= 86) return 'Snow Showers'
   return 'Thunderstorm'
+}
+
+function relativeTime(iso: string | null): string {
+  if (!iso) return ''
+  const diff = Date.now() - new Date(iso).getTime()
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  return `${Math.floor(hours / 24)}d ago`
+}
+
+function taskStatusIndicator(status: string): 'pending' | 'in-progress' | 'success' | 'info' {
+  if (status === 'todo') return 'pending'
+  if (status === 'in_progress') return 'in-progress'
+  if (status === 'done') return 'success'
+  return 'info'
 }
 
 export default function DashboardPage() {
@@ -152,337 +180,141 @@ export default function DashboardPage() {
   }, [])
 
   return (
-    <>
-      <Navbar />
-      <div style={{ padding: '2rem', maxWidth: 960, margin: '0 auto' }}>
-        <div style={{ marginBottom: '2rem' }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: '0.8rem',
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              color: '#00d4ff',
-            }}
-          >
-            Mission Status
-          </h1>
-          <div
-            style={{
-              height: '1px',
-              background: 'linear-gradient(90deg, #00d4ff 0%, #1e4470 60%, transparent 100%)',
-              marginTop: '0.5rem',
-            }}
-          />
-        </div>
+    <Layout>
+      <ContentLayout header={<Header variant="h1">Mission Status</Header>}>
+        <SpaceBetween size="l">
+          {error && <Alert type="error">{error}</Alert>}
 
-        {error && (
-          <div
-            style={{
-              borderLeft: '3px solid #ff3a3a',
-              background: 'rgba(255, 58, 58, 0.07)',
-              padding: '0.5rem 0.75rem',
-              marginBottom: '1.5rem',
-              color: '#ff3a3a',
-              fontSize: '0.8rem',
-              letterSpacing: '0.05em',
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {/* Row 1: Clock + Weather */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '1rem', marginBottom: '1rem' }}>
-          <ClockWidget clock={clock} />
-          <WeatherWidget weather={weather} />
-        </div>
-
-        {/* Row 2: Task + operator stats */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
-          {data ? (
-            <>
-              <StatCard label="Todo" value={data.stats.tasks.todo} accent="#f59e0b" />
-              <StatCard label="In Progress" value={data.stats.tasks.in_progress} accent="#3b82f6" />
-              <StatCard label="Resolved" value={data.stats.tasks.done} accent="#22c55e" />
-              <StatCard label="Operators" value={data.stats.total_users} accent="#00d4ff" />
-            </>
-          ) : (
-            !error && (
-              <p style={{ color: '#52809e', fontSize: '0.8rem', letterSpacing: '0.1em', gridColumn: '1/-1' }}>
-                LOADING TELEMETRY…
-              </p>
-            )
+          {/* Stats row */}
+          {data && (
+            <ColumnLayout columns={4}>
+              <Container>
+                <SpaceBetween size="xs">
+                  <Box variant="awsui-key-label">Todo</Box>
+                  <Box variant="h1">{data.stats.tasks.todo}</Box>
+                </SpaceBetween>
+              </Container>
+              <Container>
+                <SpaceBetween size="xs">
+                  <Box variant="awsui-key-label">In Progress</Box>
+                  <Box variant="h1">{data.stats.tasks.in_progress}</Box>
+                </SpaceBetween>
+              </Container>
+              <Container>
+                <SpaceBetween size="xs">
+                  <Box variant="awsui-key-label">Resolved</Box>
+                  <Box variant="h1">{data.stats.tasks.done}</Box>
+                </SpaceBetween>
+              </Container>
+              <Container>
+                <SpaceBetween size="xs">
+                  <Box variant="awsui-key-label">Operators</Box>
+                  <Box variant="h1">{data.stats.total_users}</Box>
+                </SpaceBetween>
+              </Container>
+            </ColumnLayout>
           )}
-        </div>
 
-        {/* Row 3: My active tasks */}
-        <MyTasksWidget tasks={myTasks} />
+          {/* Clock + Weather row */}
+          <ColumnLayout columns={2}>
+            <Container header={<Header variant="h2">Zulu Time</Header>}>
+              <SpaceBetween size="xs">
+                <Box variant="h1" fontSize="display-l">
+                  {clock.time || '——:——:——'}
+                </Box>
+                <Box color="text-body-secondary">{clock.date || '————-——-——'}</Box>
+              </SpaceBetween>
+            </Container>
 
-        {/* Row 4: Intelligence feed headlines */}
-        <div style={{ marginTop: '1rem' }}>
-          <FeedWidget items={feedItems} loading={feedsLoading} />
-        </div>
-      </div>
-    </>
-  )
-}
-
-function ClockWidget({ clock }: { clock: { time: string; date: string } }) {
-  return (
-    <div
-      style={{
-        background: '#132035',
-        border: '1px solid #1e4470',
-        borderLeft: '3px solid #00d4ff',
-        borderRadius: 4,
-        padding: '1.25rem',
-      }}
-    >
-      <div style={{ fontSize: '0.65rem', letterSpacing: '0.2em', color: '#4a7aa7', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-        Zulu Time
-      </div>
-      <div
-        style={{
-          fontSize: '2rem',
-          fontWeight: 700,
-          color: '#00d4ff',
-          textShadow: '0 0 16px rgba(0, 212, 255, 0.4)',
-          letterSpacing: '0.05em',
-          fontVariantNumeric: 'tabular-nums',
-          lineHeight: 1,
-        }}
-      >
-        {clock.time || '——:——:——'}
-      </div>
-      <div style={{ marginTop: '0.4rem', color: '#4a7aa7', fontSize: '0.7rem', letterSpacing: '0.1em' }}>
-        {clock.date || '————-——-——'}
-      </div>
-    </div>
-  )
-}
-
-function WeatherWidget({ weather }: { weather: WeatherState }) {
-  return (
-    <div
-      style={{
-        background: '#132035',
-        border: '1px solid #1e4470',
-        borderLeft: '3px solid #00d4ff',
-        borderRadius: 4,
-        padding: '1.25rem',
-      }}
-    >
-      <div style={{ fontSize: '0.65rem', letterSpacing: '0.2em', color: '#4a7aa7', textTransform: 'uppercase', marginBottom: '0.5rem' }}>
-        Local Weather
-      </div>
-      {weather.status === 'loading' && (
-        <p style={{ color: '#4a7aa7', fontSize: '0.75rem', letterSpacing: '0.1em', margin: 0 }}>ACQUIRING POSITION…</p>
-      )}
-      {weather.status === 'denied' && (
-        <p style={{ color: '#52809e', fontSize: '0.75rem', letterSpacing: '0.05em', margin: 0 }}>
-          Location access denied — enable geolocation to view weather.
-        </p>
-      )}
-      {weather.status === 'error' && (
-        <p style={{ color: '#ff3a3a', fontSize: '0.75rem', letterSpacing: '0.05em', margin: 0 }}>
-          Weather feed unavailable.
-        </p>
-      )}
-      {weather.status === 'ok' && (
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '1.5rem' }}>
-          <div
-            style={{
-              fontSize: '2rem',
-              fontWeight: 700,
-              color: '#00d4ff',
-              textShadow: '0 0 16px rgba(0, 212, 255, 0.4)',
-              lineHeight: 1,
-            }}
-          >
-            {weather.temp}°F
-          </div>
-          <div>
-            <div style={{ color: '#e2e8f0', fontSize: '0.85rem', letterSpacing: '0.05em' }}>{weather.condition}</div>
-            <div style={{ color: '#4a7aa7', fontSize: '0.7rem', letterSpacing: '0.08em', marginTop: '0.2rem' }}>
-              Wind {weather.windspeed} mph
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
-  return (
-    <div
-      style={{
-        background: '#132035',
-        border: '1px solid #1e4470',
-        borderLeft: `3px solid ${accent}`,
-        borderRadius: 4,
-        padding: '1.25rem',
-      }}
-    >
-      <div
-        style={{
-          fontSize: '2.5rem',
-          fontWeight: 700,
-          color: accent,
-          textShadow: `0 0 16px ${accent}66`,
-          lineHeight: 1,
-        }}
-      >
-        {value}
-      </div>
-      <div
-        style={{
-          marginTop: '0.5rem',
-          color: '#4a7aa7',
-          fontSize: '0.68rem',
-          letterSpacing: '0.15em',
-          textTransform: 'uppercase',
-        }}
-      >
-        {label}
-      </div>
-    </div>
-  )
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  todo: 'TODO',
-  in_progress: 'IN PROGRESS',
-}
-
-const STATUS_COLOR: Record<string, string> = {
-  todo: '#f59e0b',
-  in_progress: '#3b82f6',
-}
-
-function MyTasksWidget({ tasks }: { tasks: Task[] }) {
-  return (
-    <div
-      style={{
-        background: '#132035',
-        border: '1px solid #1e4470',
-        borderLeft: '3px solid #00d4ff',
-        borderRadius: 4,
-        padding: '1.25rem',
-      }}
-    >
-      <div style={{ fontSize: '0.65rem', letterSpacing: '0.2em', color: '#4a7aa7', textTransform: 'uppercase', marginBottom: '0.75rem' }}>
-        My Active Assignments
-      </div>
-      {tasks.length === 0 ? (
-        <p style={{ color: '#52809e', fontSize: '0.75rem', letterSpacing: '0.08em', margin: 0 }}>
-          NO ACTIVE ASSIGNMENTS
-        </p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {tasks.map((t) => (
-            <div
-              key={t._id}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.75rem',
-                padding: '0.5rem 0',
-                borderBottom: '1px solid #1a2f4a',
-              }}
-            >
-              <span
-                style={{
-                  fontSize: '0.6rem',
-                  letterSpacing: '0.1em',
-                  color: STATUS_COLOR[t.status] ?? '#4a7aa7',
-                  border: `1px solid ${STATUS_COLOR[t.status] ?? '#4a7aa7'}`,
-                  borderRadius: 2,
-                  padding: '0.1rem 0.35rem',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {STATUS_LABEL[t.status] ?? t.status.toUpperCase()}
-              </span>
-              <span style={{ color: '#c8d8e8', fontSize: '0.82rem' }}>{t.title}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function relativeTime(iso: string | null): string {
-  if (!iso) return ''
-  const diff = Date.now() - new Date(iso).getTime()
-  const minutes = Math.floor(diff / 60000)
-  if (minutes < 60) return `${minutes}m ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  return `${Math.floor(hours / 24)}d ago`
-}
-
-function FeedWidget({ items, loading }: { items: FeedItem[]; loading: boolean }) {
-  return (
-    <div
-      style={{
-        background: '#132035',
-        border: '1px solid #1e4470',
-        borderLeft: '3px solid #00d4ff',
-        borderRadius: 4,
-        padding: '1.25rem',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
-        <div style={{ fontSize: '0.65rem', letterSpacing: '0.2em', color: '#4a7aa7', textTransform: 'uppercase' }}>
-          Intelligence Headlines
-        </div>
-        <Link
-          to="/feeds"
-          style={{ fontSize: '0.65rem', letterSpacing: '0.1em', color: '#4a7aa7', textDecoration: 'none', textTransform: 'uppercase' }}
-        >
-          Manage →
-        </Link>
-      </div>
-      {loading && (
-        <p style={{ color: '#4a7aa7', fontSize: '0.75rem', letterSpacing: '0.1em', margin: 0 }}>LOADING…</p>
-      )}
-      {!loading && items.length === 0 && (
-        <p style={{ color: '#52809e', fontSize: '0.75rem', letterSpacing: '0.08em', margin: 0 }}>
-          NO FEEDS CONFIGURED — <Link to="/feeds" style={{ color: '#4a7aa7' }}>add feeds on the Intelligence Feeds page</Link>
-        </p>
-      )}
-      {!loading && items.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0' }}>
-          {items.map((item, i) => (
-            <div
-              key={i}
-              style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem', padding: '0.45rem 0', borderBottom: '1px solid #1a2f4a' }}
-            >
-              <a
-                href={item.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{ color: '#c8d8e8', fontSize: '0.82rem', textDecoration: 'none', flex: 1 }}
-                onMouseOver={(e) => (e.currentTarget.style.color = '#00d4ff')}
-                onMouseOut={(e) => (e.currentTarget.style.color = '#c8d8e8')}
-              >
-                {item.title || '(no title)'}
-              </a>
-              <span style={{ color: '#4a7aa7', fontSize: '0.65rem', letterSpacing: '0.05em', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                {item.sourceName}
-              </span>
-              {item.published && (
-                <span style={{ color: '#52809e', fontSize: '0.62rem', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {relativeTime(item.published)}
-                </span>
+            <Container header={<Header variant="h2">Local Weather</Header>}>
+              {weather.status === 'loading' && <Box color="text-body-secondary">Acquiring position…</Box>}
+              {weather.status === 'denied' && (
+                <Box color="text-body-secondary">Location access denied — enable geolocation to view weather.</Box>
               )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
+              {weather.status === 'error' && (
+                <Box color="text-status-error">Weather feed unavailable.</Box>
+              )}
+              {weather.status === 'ok' && (
+                <SpaceBetween size="xs" direction="horizontal">
+                  <Box variant="h1" fontSize="display-l">{weather.temp}°F</Box>
+                  <SpaceBetween size="xxs">
+                    <Box>{weather.condition}</Box>
+                    <Box color="text-body-secondary">Wind {weather.windspeed} mph</Box>
+                  </SpaceBetween>
+                </SpaceBetween>
+              )}
+            </Container>
+          </ColumnLayout>
+
+          {/* My Active Assignments */}
+          <Table
+            header={<Header variant="h2">My Active Assignments</Header>}
+            columnDefinitions={[
+              {
+                id: 'status',
+                header: 'Status',
+                cell: (item: Task) => (
+                  <StatusIndicator type={taskStatusIndicator(item.status)}>
+                    {item.status.replace('_', ' ')}
+                  </StatusIndicator>
+                ),
+              },
+              {
+                id: 'title',
+                header: 'Title',
+                cell: (item: Task) => (
+                  <RouterLink to={`/tasks/${item._id}`}>{item.title}</RouterLink>
+                ),
+              },
+            ]}
+            items={myTasks}
+            empty={
+              <Box textAlign="center" color="text-body-secondary">
+                No active assignments
+              </Box>
+            }
+          />
+
+          {/* Intelligence Headlines */}
+          <Container
+            header={
+              <Header
+                variant="h2"
+                actions={
+                  <Link href="/feeds" onFollow={(e) => { e.preventDefault(); window.location.href = '/feeds' }}>
+                    Manage feeds →
+                  </Link>
+                }
+              >
+                Intelligence Headlines
+              </Header>
+            }
+          >
+            {feedsLoading && <Spinner />}
+            {!feedsLoading && feedItems.length === 0 && (
+              <Box color="text-body-secondary">
+                No feeds configured —{' '}
+                <RouterLink to="/feeds">add feeds on the Intelligence Feeds page</RouterLink>
+              </Box>
+            )}
+            {!feedsLoading && feedItems.length > 0 && (
+              <SpaceBetween size="xs">
+                {feedItems.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '0.75rem' }}>
+                    <Link href={item.link} external fontSize="body-m">
+                      {item.title || '(no title)'}
+                    </Link>
+                    <Box variant="small" color="text-body-secondary">{item.sourceName}</Box>
+                    {item.published && (
+                      <Box variant="small" color="text-body-secondary">{relativeTime(item.published)}</Box>
+                    )}
+                  </div>
+                ))}
+              </SpaceBetween>
+            )}
+          </Container>
+        </SpaceBetween>
+      </ContentLayout>
+    </Layout>
   )
 }
