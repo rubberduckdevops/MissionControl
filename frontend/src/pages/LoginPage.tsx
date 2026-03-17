@@ -1,5 +1,15 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import ContentLayout from '@cloudscape-design/components/content-layout'
+import Container from '@cloudscape-design/components/container'
+import Header from '@cloudscape-design/components/header'
+import Form from '@cloudscape-design/components/form'
+import FormField from '@cloudscape-design/components/form-field'
+import Input from '@cloudscape-design/components/input'
+import Button from '@cloudscape-design/components/button'
+import Alert from '@cloudscape-design/components/alert'
+import Box from '@cloudscape-design/components/box'
+import SpaceBetween from '@cloudscape-design/components/space-between'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function LoginPage() {
@@ -34,107 +44,62 @@ export default function LoginPage() {
         padding: '2rem',
       }}
     >
-      <div style={{ width: '100%', maxWidth: 400 }}>
-        {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div
-            style={{
-              fontSize: '1.6rem',
-              fontWeight: 700,
-              letterSpacing: '0.2em',
-              color: '#00d4ff',
-              textShadow: '0 0 20px rgba(0, 212, 255, 0.6)',
-              textTransform: 'uppercase',
-            }}
-          >
-            MissonControl
-          </div>
-          <div style={{ color: '#52809e', fontSize: '0.72rem', letterSpacing: '0.15em', marginTop: '0.4rem' }}>
-            // AUTHENTICATION REQUIRED
-          </div>
-        </div>
-
-        {/* Panel */}
-        <div
-          style={{
-            background: '#132035',
-            border: '1px solid #1e4470',
-            borderRadius: 4,
-            overflow: 'hidden',
-          }}
+      <div style={{ width: '100%', maxWidth: 420 }}>
+        <ContentLayout
+          header={
+            <SpaceBetween size="xs">
+              <Box variant="h1" textAlign="center">MissionControl</Box>
+              <Box variant="p" textAlign="center" color="text-body-secondary">Operator Login</Box>
+            </SpaceBetween>
+          }
         >
-          {/* Panel title bar */}
-          <div
-            style={{
-              padding: '0.5rem 1.25rem',
-              borderBottom: '1px solid #1e4470',
-              borderLeft: '3px solid #00d4ff',
-            }}
-          >
-            <span style={{ color: '#00d4ff', fontSize: '0.68rem', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-              Operator Login
-            </span>
-          </div>
-
-          <div style={{ padding: '1.5rem' }}>
-            {error && (
-              <div
-                style={{
-                  borderLeft: '3px solid #ff3a3a',
-                  background: 'rgba(255, 58, 58, 0.07)',
-                  padding: '0.5rem 0.75rem',
-                  marginBottom: '1rem',
-                  color: '#ff3a3a',
-                  fontSize: '0.78rem',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                {error}
-              </div>
-            )}
-
+          <Container>
             <form onSubmit={handleSubmit}>
-              <label>
-                <span style={{ fontSize: '0.68rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' }}>
-                  Email
-                </span>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                  autoComplete="email"
-                  placeholder="operator@missoncontrol.io"
-                />
-              </label>
-              <label>
-                <span style={{ fontSize: '0.68rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' }}>
-                  Password
-                </span>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={loading}
-                style={{ width: '100%', marginTop: '0.5rem', letterSpacing: '0.12em' }}
+              <Form
+                actions={
+                  <Button
+                    variant="primary"
+                    formAction="submit"
+                    loading={loading}
+                    loadingText="Authenticating..."
+                  >
+                    Authenticate
+                  </Button>
+                }
               >
-                {loading ? 'AUTHENTICATING…' : 'AUTHENTICATE'}
-              </button>
+                <SpaceBetween size="m">
+                  {error && (
+                    <Alert type="error">{error}</Alert>
+                  )}
+                  <FormField label="Email">
+                    <Input
+                      type="email"
+                      value={email}
+                      onChange={({ detail }) => setEmail(detail.value)}
+                      placeholder="operator@missioncontrol.io"
+                      autoComplete="email"
+                    />
+                  </FormField>
+                  <FormField label="Password">
+                    <Input
+                      type="password"
+                      value={password}
+                      onChange={({ detail }) => setPassword(detail.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                    />
+                  </FormField>
+                  <Box textAlign="center">
+                    <Box variant="small">
+                      No account?{' '}
+                      <RouterLink to="/register">Register operator</RouterLink>
+                    </Box>
+                  </Box>
+                </SpaceBetween>
+              </Form>
             </form>
-
-            <p style={{ marginTop: '1.25rem', textAlign: 'center', fontSize: '0.75rem', color: '#52809e' }}>
-              No account?{' '}
-              <Link to="/register">Register operator</Link>
-            </p>
-          </div>
-        </div>
+          </Container>
+        </ContentLayout>
       </div>
     </div>
   )

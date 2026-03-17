@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react'
-import Navbar from '../components/Navbar'
+import ContentLayout from '@cloudscape-design/components/content-layout'
+import Header from '@cloudscape-design/components/header'
+import Table from '@cloudscape-design/components/table'
+import Input from '@cloudscape-design/components/input'
+import Button from '@cloudscape-design/components/button'
+import SpaceBetween from '@cloudscape-design/components/space-between'
+import Box from '@cloudscape-design/components/box'
+import Alert from '@cloudscape-design/components/alert'
+import Modal from '@cloudscape-design/components/modal'
+import StatusIndicator from '@cloudscape-design/components/status-indicator'
+import Spinner from '@cloudscape-design/components/spinner'
+import Layout from '../components/Layout'
 import { useAuth } from '../contexts/AuthContext'
 import api from '../services/api'
 
@@ -23,7 +34,7 @@ export default function AdminPage() {
   const [editSaving, setEditSaving] = useState(false)
   const [editError, setEditError] = useState('')
 
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+  const [confirmDeleteUser, setConfirmDeleteUser] = useState<UserPublic | null>(null)
 
   useEffect(() => {
     api
@@ -79,321 +90,171 @@ export default function AdminPage() {
     try {
       await api.delete(`/api/admin/users/${id}`)
       setUsers((prev) => prev.filter((u) => u.id !== id))
-      setConfirmDeleteId(null)
+      setConfirmDeleteUser(null)
     } catch {
       setError('Failed to delete user')
-      setConfirmDeleteId(null)
+      setConfirmDeleteUser(null)
     }
   }
 
-  const cellStyle: React.CSSProperties = {
-    padding: '0.6rem 0.75rem',
-    fontSize: '0.78rem',
-    color: '#c8d8e8',
-    borderBottom: '1px solid #1e4470',
-    verticalAlign: 'middle',
-  }
-
-  const headerCellStyle: React.CSSProperties = {
-    padding: '0.6rem 0.75rem',
-    color: '#4a7aa7',
-    fontSize: '0.65rem',
-    letterSpacing: '0.12em',
-    textTransform: 'uppercase',
-    borderBottom: '2px solid #1e4470',
-    background: '#0e1a2b',
-    fontWeight: 600,
-    verticalAlign: 'middle',
-  }
-
-  const inputStyle: React.CSSProperties = {
-    background: '#0e1a2b',
-    border: '1px solid #1e4470',
-    color: '#c8d8e8',
-    padding: '0.25rem 0.5rem',
-    fontSize: '0.78rem',
-    borderRadius: 2,
-    width: '100%',
-    boxSizing: 'border-box',
+  if (loading) {
+    return (
+      <Layout>
+        <ContentLayout header={<Header variant="h1">Operator Management</Header>}>
+          <Spinner size="large" />
+        </ContentLayout>
+      </Layout>
+    )
   }
 
   return (
-    <>
-      <Navbar />
-      <div style={{ padding: '2rem', maxWidth: 1000, margin: '0 auto' }}>
-        <div style={{ marginBottom: '2rem' }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: '0.8rem',
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              color: '#00d4ff',
-            }}
-          >
-            Operator Management
-          </h1>
-          <div
-            style={{
-              height: '1px',
-              background: 'linear-gradient(90deg, #00d4ff 0%, #1e4470 60%, transparent 100%)',
-              marginTop: '0.5rem',
-            }}
-          />
-        </div>
+    <Layout>
+      <ContentLayout header={<Header variant="h1">Operator Management</Header>}>
+        <SpaceBetween size="m">
+          {error && <Alert type="error">{error}</Alert>}
+          {editError && <Alert type="error">{editError}</Alert>}
 
-        {error && (
-          <div
-            style={{
-              borderLeft: '3px solid #ff3a3a',
-              background: 'rgba(255,58,58,0.07)',
-              padding: '0.5rem 0.75rem',
-              marginBottom: '1.5rem',
-              color: '#ff3a3a',
-              fontSize: '0.78rem',
-              letterSpacing: '0.05em',
-            }}
-          >
-            {error}
-          </div>
-        )}
-
-        {loading && (
-          <p style={{ color: '#52809e', fontSize: '0.78rem', letterSpacing: '0.1em' }}>
-            LOADING OPERATORS…
-          </p>
-        )}
-
-        {!loading && users.length === 0 && !error && (
-          <p style={{ color: '#52809e', fontSize: '0.78rem', letterSpacing: '0.1em' }}>
-            No operators found.
-          </p>
-        )}
-
-        {!loading && users.length > 0 && (
-          <div
-            style={{
-              background: '#132035',
-              border: '1px solid #1e4470',
-              borderRadius: 4,
-              overflow: 'hidden',
-            }}
-          >
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  <th style={headerCellStyle}>Username</th>
-                  <th style={headerCellStyle}>Email</th>
-                  <th style={headerCellStyle}>Role</th>
-                  <th style={headerCellStyle}>Joined</th>
-                  <th style={{ ...headerCellStyle, textAlign: 'right' }}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u) => {
+          <Table
+            columnDefinitions={[
+              {
+                id: 'username',
+                header: 'Username',
+                cell: (u: UserPublic) => {
                   const isMe = u.id === currentUser?.id
-                  const isEditing = editingId === u.id
-                  const isConfirmingDelete = confirmDeleteId === u.id
-
+                  if (editingId === u.id) {
+                    return (
+                      <Input
+                        value={editUsername}
+                        onChange={({ detail }) => setEditUsername(detail.value)}
+                      />
+                    )
+                  }
                   return (
-                    <tr
-                      key={u.id}
-                      style={{ background: isEditing ? '#0e1a2b' : 'transparent' }}
-                    >
-                      <td style={cellStyle}>
-                        {isEditing ? (
-                          <input
-                            value={editUsername}
-                            onChange={(e) => setEditUsername(e.target.value)}
-                            style={inputStyle}
-                          />
-                        ) : (
-                          <>
-                            {u.username}
-                            {isMe && (
-                              <span
-                                style={{
-                                  marginLeft: '0.4rem',
-                                  color: '#00d4ff',
-                                  fontSize: '0.65rem',
-                                  letterSpacing: '0.05em',
-                                }}
-                              >
-                                (you)
-                              </span>
-                            )}
-                          </>
-                        )}
-                      </td>
-
-                      <td style={cellStyle}>
-                        {isEditing ? (
-                          <input
-                            value={editEmail}
-                            onChange={(e) => setEditEmail(e.target.value)}
-                            style={inputStyle}
-                          />
-                        ) : (
-                          <span style={{ color: '#52809e' }}>{u.email}</span>
-                        )}
-                      </td>
-
-                      <td style={cellStyle}>
-                        <span
-                          style={{
-                            fontSize: '0.65rem',
-                            letterSpacing: '0.1em',
-                            textTransform: 'uppercase',
-                            color: u.role === 'admin' ? '#00d4ff' : '#4a7aa7',
-                          }}
-                        >
-                          {u.role}
-                        </span>
-                      </td>
-
-                      <td style={{ ...cellStyle, color: '#52809e' }}>
-                        {new Date(u.created_at).toLocaleDateString()}
-                      </td>
-
-                      <td style={{ ...cellStyle, textAlign: 'right' }}>
-                        {isEditing ? (
-                          <div
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'flex-end',
-                              gap: '0.3rem',
-                            }}
-                          >
-                            {editError && (
-                              <span style={{ color: '#ff3a3a', fontSize: '0.68rem' }}>
-                                {editError}
-                              </span>
-                            )}
-                            <div style={{ display: 'flex', gap: '0.4rem' }}>
-                              <button
-                                onClick={() => saveEdit(u.id)}
-                                disabled={editSaving}
-                                style={{
-                                  fontSize: '0.68rem',
-                                  padding: '0.2rem 0.6rem',
-                                  letterSpacing: '0.08em',
-                                }}
-                              >
-                                {editSaving ? 'Saving…' : 'Save'}
-                              </button>
-                              <button
-                                onClick={cancelEdit}
-                                style={{
-                                  fontSize: '0.68rem',
-                                  padding: '0.2rem 0.6rem',
-                                  letterSpacing: '0.08em',
-                                  color: '#4a7aa7',
-                                  borderColor: '#4a7aa7',
-                                }}
-                              >
-                                Cancel
-                              </button>
-                            </div>
-                          </div>
-                        ) : isConfirmingDelete ? (
-                          <div
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'flex-end',
-                              gap: '0.4rem',
-                            }}
-                          >
-                            <span style={{ color: '#ff3a3a', fontSize: '0.68rem' }}>
-                              Confirm?
-                            </span>
-                            <button
-                              onClick={() => handleDelete(u.id)}
-                              style={{
-                                fontSize: '0.68rem',
-                                padding: '0.2rem 0.6rem',
-                                letterSpacing: '0.08em',
-                                color: '#ff3a3a',
-                                borderColor: '#ff3a3a',
-                              }}
-                            >
-                              Yes, Delete
-                            </button>
-                            <button
-                              onClick={() => setConfirmDeleteId(null)}
-                              style={{
-                                fontSize: '0.68rem',
-                                padding: '0.2rem 0.6rem',
-                                letterSpacing: '0.08em',
-                                color: '#4a7aa7',
-                                borderColor: '#4a7aa7',
-                              }}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'flex-end',
-                              gap: '0.4rem',
-                            }}
-                          >
-                            <button
-                              onClick={() => startEdit(u)}
-                              style={{
-                                fontSize: '0.68rem',
-                                padding: '0.2rem 0.6rem',
-                                letterSpacing: '0.08em',
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => handleRoleToggle(u)}
-                              disabled={isMe}
-                              title={isMe ? 'Cannot change your own role' : undefined}
-                              style={{
-                                fontSize: '0.68rem',
-                                padding: '0.2rem 0.6rem',
-                                letterSpacing: '0.08em',
-                                color: u.role === 'admin' ? '#f59e0b' : '#00d4ff',
-                                borderColor: u.role === 'admin' ? '#f59e0b' : '#00d4ff',
-                                opacity: isMe ? 0.4 : 1,
-                                cursor: isMe ? 'not-allowed' : 'pointer',
-                              }}
-                            >
-                              {u.role === 'admin' ? 'Demote' : 'Promote'}
-                            </button>
-                            <button
-                              onClick={() => setConfirmDeleteId(u.id)}
-                              disabled={isMe}
-                              title={isMe ? 'Cannot delete your own account' : undefined}
-                              style={{
-                                fontSize: '0.68rem',
-                                padding: '0.2rem 0.6rem',
-                                letterSpacing: '0.08em',
-                                color: '#ff3a3a',
-                                borderColor: '#ff3a3a',
-                                opacity: isMe ? 0.4 : 1,
-                                cursor: isMe ? 'not-allowed' : 'pointer',
-                              }}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </td>
-                    </tr>
+                    <span>
+                      {u.username}
+                      {isMe && (
+                        <Box variant="small" color="text-status-info" display="inline">
+                          {' '}(you)
+                        </Box>
+                      )}
+                    </span>
                   )
-                })}
-              </tbody>
-            </table>
-          </div>
+                },
+              },
+              {
+                id: 'email',
+                header: 'Email',
+                cell: (u: UserPublic) => {
+                  if (editingId === u.id) {
+                    return (
+                      <Input
+                        value={editEmail}
+                        onChange={({ detail }) => setEditEmail(detail.value)}
+                      />
+                    )
+                  }
+                  return <Box color="text-body-secondary">{u.email}</Box>
+                },
+              },
+              {
+                id: 'role',
+                header: 'Role',
+                cell: (u: UserPublic) => (
+                  <StatusIndicator type={u.role === 'admin' ? 'success' : 'info'}>
+                    {u.role}
+                  </StatusIndicator>
+                ),
+              },
+              {
+                id: 'joined',
+                header: 'Joined',
+                cell: (u: UserPublic) => (
+                  <Box color="text-body-secondary">
+                    {new Date(u.created_at).toLocaleDateString()}
+                  </Box>
+                ),
+              },
+              {
+                id: 'actions',
+                header: 'Actions',
+                cell: (u: UserPublic) => {
+                  const isMe = u.id === currentUser?.id
+                  if (editingId === u.id) {
+                    return (
+                      <SpaceBetween size="xs" direction="horizontal">
+                        <Button
+                          variant="primary"
+                          loading={editSaving}
+                          loadingText="Saving..."
+                          onClick={() => saveEdit(u.id)}
+                        >
+                          Save
+                        </Button>
+                        <Button variant="normal" onClick={cancelEdit}>
+                          Cancel
+                        </Button>
+                      </SpaceBetween>
+                    )
+                  }
+                  return (
+                    <SpaceBetween size="xs" direction="horizontal">
+                      <Button variant="normal" onClick={() => startEdit(u)}>
+                        Edit
+                      </Button>
+                      <Button
+                        variant="inline-link"
+                        disabled={isMe}
+                        onClick={() => handleRoleToggle(u)}
+                      >
+                        {u.role === 'admin' ? 'Demote' : 'Promote'}
+                      </Button>
+                      <Button
+                        variant="inline-link"
+                        disabled={isMe}
+                        onClick={() => setConfirmDeleteUser(u)}
+                      >
+                        Delete
+                      </Button>
+                    </SpaceBetween>
+                  )
+                },
+              },
+            ]}
+            items={users}
+            empty={
+              <Box textAlign="center" color="text-body-secondary">
+                No operators found.
+              </Box>
+            }
+            header={<Header variant="h2" counter={`(${users.length})`}>Operators</Header>}
+          />
+        </SpaceBetween>
+      </ContentLayout>
+
+      <Modal
+        visible={confirmDeleteUser !== null}
+        onDismiss={() => setConfirmDeleteUser(null)}
+        header="Confirm Delete"
+        footer={
+          <Box float="right">
+            <SpaceBetween size="xs" direction="horizontal">
+              <Button variant="normal" onClick={() => setConfirmDeleteUser(null)}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={() => confirmDeleteUser && handleDelete(confirmDeleteUser.id)}
+              >
+                Delete
+              </Button>
+            </SpaceBetween>
+          </Box>
+        }
+      >
+        {confirmDeleteUser && (
+          <Box>
+            Are you sure you want to delete operator <strong>{confirmDeleteUser.username}</strong>? This action cannot be undone.
+          </Box>
         )}
-      </div>
-    </>
+      </Modal>
+    </Layout>
   )
 }

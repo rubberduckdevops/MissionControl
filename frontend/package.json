@@ -10,6 +10,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@cloudscape-design/components": "^3.0.1233",
+    "@cloudscape-design/design-tokens": "^3.0.73",
+    "@cloudscape-design/global-styles": "^1.0.51",
     "axios": "^1.7.2",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

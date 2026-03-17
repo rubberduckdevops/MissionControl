@@ -1,6 +1,22 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import Navbar from '../components/Navbar'
+import { useNavigate } from 'react-router-dom'
+import ContentLayout from '@cloudscape-design/components/content-layout'
+import Header from '@cloudscape-design/components/header'
+import Container from '@cloudscape-design/components/container'
+import Table from '@cloudscape-design/components/table'
+import Form from '@cloudscape-design/components/form'
+import FormField from '@cloudscape-design/components/form-field'
+import Input from '@cloudscape-design/components/input'
+import Select from '@cloudscape-design/components/select'
+import Button from '@cloudscape-design/components/button'
+import SpaceBetween from '@cloudscape-design/components/space-between'
+import Box from '@cloudscape-design/components/box'
+import Alert from '@cloudscape-design/components/alert'
+import StatusIndicator from '@cloudscape-design/components/status-indicator'
+import Pagination from '@cloudscape-design/components/pagination'
+import Modal from '@cloudscape-design/components/modal'
+import Link from '@cloudscape-design/components/link'
+import Layout from '../components/Layout'
 import api from '../services/api'
 
 interface UserPublic {
@@ -55,72 +71,38 @@ interface PaginatedTasksResponse {
 const ALL_STATUSES = ['todo', 'in_progress', 'done'] as const
 type TaskStatus = typeof ALL_STATUSES[number]
 
-const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
-  todo:        { color: '#4a7aa7', label: 'TODO' },
-  in_progress: { color: '#f59e0b', label: 'IN PROGRESS' },
-  done:        { color: '#00ff9f', label: 'DONE' },
+const STATUS_LABEL: Record<TaskStatus, string> = {
+  todo: 'Todo',
+  in_progress: 'In Progress',
+  done: 'Done',
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] ?? { color: '#4a7aa7', label: status.toUpperCase() }
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: '0.35rem',
-        fontSize: '0.65rem',
-        letterSpacing: '0.1em',
-        color: cfg.color,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      <span
-        style={{
-          width: 6,
-          height: 6,
-          borderRadius: '50%',
-          background: cfg.color,
-          boxShadow: `0 0 6px ${cfg.color}`,
-          flexShrink: 0,
-        }}
-      />
-      {cfg.label}
-    </span>
-  )
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' as const }}>
-      {children}
-    </span>
-  )
+function taskStatusType(status: string): 'pending' | 'in-progress' | 'success' | 'info' {
+  if (status === 'todo') return 'pending'
+  if (status === 'in_progress') return 'in-progress'
+  if (status === 'done') return 'success'
+  return 'info'
 }
 
 export default function TasksPage() {
+  const navigate = useNavigate()
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  // Pagination
   const [page, setPage] = useState(1)
   const limit = 25
   const [totalPages, setTotalPages] = useState(1)
   const [total, setTotal] = useState(0)
 
-  // Status filter — default: show active tasks only
   const [statusFilter, setStatusFilter] = useState<TaskStatus[]>(['todo', 'in_progress'])
 
-  // Users
   const [users, setUsers] = useState<UserPublic[]>([])
 
-  // CTI data for create form
   const [categories, setCategories] = useState<Category[]>([])
   const [formTypes, setFormTypes] = useState<CtiType[]>([])
   const [formItems, setFormItems] = useState<CtiItem[]>([])
 
-  // Create form state
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
@@ -130,7 +112,8 @@ export default function TasksPage() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  // Load reference data once on mount
+  const [deleteModalTask, setDeleteModalTask] = useState<Task | null>(null)
+
   useEffect(() => {
     Promise.all([
       api.get<UserPublic[]>('/api/users'),
@@ -143,7 +126,6 @@ export default function TasksPage() {
       .catch(() => {})
   }, [])
 
-  // Reload tasks whenever page or filter changes
   useEffect(() => {
     setLoading(true)
     setError('')
@@ -164,7 +146,6 @@ export default function TasksPage() {
       .finally(() => setLoading(false))
   }, [page, limit, statusFilter])
 
-  // When form category changes, load types and reset deeper selections
   useEffect(() => {
     setFormTypeId('')
     setFormItemId('')
@@ -176,7 +157,6 @@ export default function TasksPage() {
       .catch(() => {})
   }, [formCategoryId])
 
-  // When form type changes, load items
   useEffect(() => {
     setFormItemId('')
     if (!formTypeId) { setFormItems([]); return }
@@ -231,8 +211,10 @@ export default function TasksPage() {
       await api.delete(`/api/tasks/${id}`)
       setTasks((prev) => prev.filter((t) => t._id !== id))
       setTotal((prev) => prev - 1)
+      setDeleteModalTask(null)
     } catch {
       setError('Failed to delete task')
+      setDeleteModalTask(null)
     }
   }
 
@@ -241,357 +223,207 @@ export default function TasksPage() {
     return users.find((u) => u.id === id)?.username ?? null
   }
 
+  const userOptions = [
+    { label: 'Unassigned', value: '' },
+    ...users.map((u) => ({ label: u.username, value: u.id })),
+  ]
+
+  const categoryOptions = [
+    { label: '— none —', value: '' },
+    ...categories.map((c) => ({ label: c.name, value: c._id })),
+  ]
+
+  const typeOptions = [
+    { label: '— none —', value: '' },
+    ...formTypes.map((t) => ({ label: t.name, value: t._id })),
+  ]
+
+  const itemOptions = [
+    { label: '— none —', value: '' },
+    ...formItems.map((i) => ({ label: i.name, value: i._id })),
+  ]
+
   return (
-    <>
-      <Navbar />
-      <div style={{ padding: '2rem', maxWidth: 900, margin: '0 auto' }}>
-        {/* Page heading */}
-        <div style={{ marginBottom: '2rem' }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: '0.8rem',
-              letterSpacing: '0.2em',
-              textTransform: 'uppercase',
-              color: '#00d4ff',
-            }}
-          >
-            Tasks
-          </h1>
-          <div
-            style={{
-              height: '1px',
-              background: 'linear-gradient(90deg, #00d4ff 0%, #1e4470 60%, transparent 100%)',
-              marginTop: '0.5rem',
-            }}
-          />
-        </div>
-
-        {/* Create form */}
-        <div
-          style={{
-            background: '#132035',
-            border: '1px solid #1e4470',
-            borderRadius: 4,
-            overflow: 'hidden',
-            marginBottom: '1.5rem',
-          }}
-        >
-          <div
-            style={{
-              padding: '0.5rem 1.25rem',
-              borderBottom: '1px solid #1e4470',
-              borderLeft: '3px solid #00d4ff',
-            }}
-          >
-            <span style={{ color: '#00d4ff', fontSize: '0.68rem', letterSpacing: '0.15em', textTransform: 'uppercase' }}>
-              New Task
-            </span>
-          </div>
-          <div style={{ padding: '1.25rem' }}>
-            {createError && (
-              <div
-                style={{
-                  borderLeft: '3px solid #ff3a3a',
-                  background: 'rgba(255,58,58,0.07)',
-                  padding: '0.4rem 0.75rem',
-                  marginBottom: '0.75rem',
-                  color: '#ff3a3a',
-                  fontSize: '0.78rem',
-                }}
-              >
-                {createError}
-              </div>
-            )}
+    <Layout>
+      <ContentLayout header={<Header variant="h1" counter={total > 0 ? `(${total})` : undefined}>Tasks</Header>}>
+        <SpaceBetween size="l">
+          {/* Create form */}
+          <Container header={<Header variant="h2">New Task</Header>}>
             <form onSubmit={handleCreate}>
-              {/* Row 1: title + description */}
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1 1 160px' }}>
-                  <FieldLabel>Title</FieldLabel>
-                  <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    required
-                    placeholder="Task title"
-                    style={{ marginBottom: 0 }}
-                  />
-                </div>
-                <div style={{ flex: '2 1 240px' }}>
-                  <FieldLabel>Objective</FieldLabel>
-                  <input
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    required
-                    placeholder="What needs to be done?"
-                    style={{ marginBottom: 0 }}
-                  />
-                </div>
-              </div>
-
-              {/* Row 2: assignee + CTI */}
-              <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                <div style={{ flex: '1 1 140px' }}>
-                  <FieldLabel>Assignee</FieldLabel>
-                  <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} style={{ marginBottom: 0 }}>
-                    <option value="">Unassigned</option>
-                    {users.map((u) => (
-                      <option key={u.id} value={u.id}>{u.username}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ flex: '1 1 130px' }}>
-                  <FieldLabel>Category</FieldLabel>
-                  <select
-                    value={formCategoryId}
-                    onChange={(e) => setFormCategoryId(e.target.value)}
-                    style={{ marginBottom: 0 }}
-                  >
-                    <option value="">— none —</option>
-                    {categories.map((c) => (
-                      <option key={c._id} value={c._id}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ flex: '1 1 130px' }}>
-                  <FieldLabel>Type</FieldLabel>
-                  <select
-                    value={formTypeId}
-                    onChange={(e) => setFormTypeId(e.target.value)}
-                    disabled={!formCategoryId}
-                    style={{ marginBottom: 0 }}
-                  >
-                    <option value="">— none —</option>
-                    {formTypes.map((t) => (
-                      <option key={t._id} value={t._id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{ flex: '1 1 130px' }}>
-                  <FieldLabel>Item</FieldLabel>
-                  <select
-                    value={formItemId}
-                    onChange={(e) => setFormItemId(e.target.value)}
-                    disabled={!formTypeId}
-                    style={{ marginBottom: 0 }}
-                  >
-                    <option value="">— none —</option>
-                    {formItems.map((i) => (
-                      <option key={i._id} value={i._id}>{i.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div style={{ marginTop: '0.75rem' }}>
-                <button type="submit" disabled={creating} style={{ letterSpacing: '0.1em', whiteSpace: 'nowrap' }}>
-                  {creating ? 'Creating…' : 'Create Task'}
-                </button>
-              </div>
+              <Form
+                actions={
+                  <Button variant="primary" formAction="submit" loading={creating} loadingText="Creating...">
+                    Create Task
+                  </Button>
+                }
+              >
+                <SpaceBetween size="m">
+                  {createError && <Alert type="error">{createError}</Alert>}
+                  <SpaceBetween size="m" direction="horizontal">
+                    <FormField label="Title" stretch>
+                      <Input
+                        value={title}
+                        onChange={({ detail }) => setTitle(detail.value)}
+                        placeholder="Task title"
+                      />
+                    </FormField>
+                    <FormField label="Objective" stretch>
+                      <Input
+                        value={description}
+                        onChange={({ detail }) => setDescription(detail.value)}
+                        placeholder="What needs to be done?"
+                      />
+                    </FormField>
+                  </SpaceBetween>
+                  <SpaceBetween size="m" direction="horizontal">
+                    <FormField label="Assignee">
+                      <Select
+                        selectedOption={userOptions.find((o) => o.value === assigneeId) ?? userOptions[0]}
+                        onChange={({ detail }) => setAssigneeId(detail.selectedOption?.value ?? '')}
+                        options={userOptions}
+                      />
+                    </FormField>
+                    <FormField label="Category">
+                      <Select
+                        selectedOption={categoryOptions.find((o) => o.value === formCategoryId) ?? categoryOptions[0]}
+                        onChange={({ detail }) => setFormCategoryId(detail.selectedOption?.value ?? '')}
+                        options={categoryOptions}
+                      />
+                    </FormField>
+                    <FormField label="Type">
+                      <Select
+                        selectedOption={typeOptions.find((o) => o.value === formTypeId) ?? typeOptions[0]}
+                        onChange={({ detail }) => setFormTypeId(detail.selectedOption?.value ?? '')}
+                        options={typeOptions}
+                        disabled={!formCategoryId}
+                      />
+                    </FormField>
+                    <FormField label="Item">
+                      <Select
+                        selectedOption={itemOptions.find((o) => o.value === formItemId) ?? itemOptions[0]}
+                        onChange={({ detail }) => setFormItemId(detail.selectedOption?.value ?? '')}
+                        options={itemOptions}
+                        disabled={!formTypeId}
+                      />
+                    </FormField>
+                  </SpaceBetween>
+                </SpaceBetween>
+              </Form>
             </form>
-          </div>
-        </div>
+          </Container>
 
-        {/* Status messages */}
-        {loading && (
-          <p style={{ color: '#52809e', fontSize: '0.78rem', letterSpacing: '0.1em' }}>LOADING OPERATIONS…</p>
-        )}
-        {error && (
-          <div
-            style={{
-              borderLeft: '3px solid #ff3a3a',
-              background: 'rgba(255,58,58,0.07)',
-              padding: '0.5rem 0.75rem',
-              marginBottom: '1rem',
-              color: '#ff3a3a',
-              fontSize: '0.78rem',
-            }}
-          >
-            {error}
-          </div>
-        )}
-        {!loading && tasks.length === 0 && !error && (
-          <p style={{ color: '#52809e', fontSize: '0.78rem', letterSpacing: '0.08em' }}>
-            No tasks yet — create one above
-          </p>
-        )}
+          {/* Task list */}
+          {error && <Alert type="error">{error}</Alert>}
 
-        {/* Status filter bar */}
-        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.65rem', letterSpacing: '0.12em', color: '#4a7aa7', textTransform: 'uppercase' as const }}>
-            Filter
-          </span>
-          {ALL_STATUSES.map((s) => {
-            const cfg = STATUS_CONFIG[s]
-            const active = statusFilter.includes(s)
-            return (
-              <button
-                key={s}
-                onClick={() => toggleStatus(s)}
-                style={{
-                  fontSize: '0.65rem',
-                  letterSpacing: '0.1em',
-                  padding: '0.2rem 0.6rem',
-                  borderRadius: 3,
-                  cursor: 'pointer',
-                  color: active ? cfg.color : '#52809e',
-                  borderColor: active ? cfg.color : '#1e4470',
-                  background: active ? `${cfg.color}18` : 'transparent',
-                  transition: 'all 0.15s',
-                }}
+          <Table
+            loading={loading}
+            loadingText="Loading tasks..."
+            header={
+              <Header
+                variant="h2"
+                actions={
+                  <SpaceBetween size="xs" direction="horizontal">
+                    {ALL_STATUSES.map((s) => (
+                      <Button
+                        key={s}
+                        variant={statusFilter.includes(s) ? 'primary' : 'normal'}
+                        onClick={() => toggleStatus(s)}
+                      >
+                        {STATUS_LABEL[s]}
+                      </Button>
+                    ))}
+                  </SpaceBetween>
+                }
               >
-                {cfg.label}
-              </button>
-            )
-          })}
-          {total > 0 && (
-            <span style={{ fontSize: '0.65rem', color: '#52809e', marginLeft: 'auto' }}>
-              {total} task{total !== 1 ? 's' : ''}
-            </span>
-          )}
-        </div>
-
-        {/* Task list */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          {tasks.map((task) => {
-            const assignee = usernameFor(task.assignee_id)
-            return (
-              <div
-                key={task._id}
-                style={{
-                  background: '#132035',
-                  border: '1px solid #1e4470',
-                  borderRadius: 4,
-                  padding: '0.875rem 1.25rem',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: '1rem',
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <Link
-                    to={`/tasks/${task._id}`}
-                    style={{
-                      fontWeight: 600,
-                      color: '#00d4ff',
-                      textDecoration: 'none',
-                      fontSize: '0.9rem',
-                      letterSpacing: '0.03em',
-                    }}
-                  >
-                    {task.title}
+                Tasks
+              </Header>
+            }
+            columnDefinitions={[
+              {
+                id: 'title',
+                header: 'Title',
+                cell: (item: Task) => (
+                  <Link onFollow={(e) => { e.preventDefault(); navigate(`/tasks/${item._id}`) }}>
+                    {item.title}
                   </Link>
-                  <p
-                    style={{
-                      margin: '0.2rem 0 0',
-                      color: '#52809e',
-                      fontSize: '0.78rem',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {task.description}
-                  </p>
-                  {(assignee || task.cti) && (
-                    <div style={{ display: 'flex', gap: '1rem', marginTop: '0.3rem', flexWrap: 'wrap' }}>
-                      {assignee && (
-                        <span style={{ fontSize: '0.65rem', color: '#4a7aa7', letterSpacing: '0.05em' }}>
-                          ✦ {assignee}
-                        </span>
-                      )}
-                      {task.cti && (
-                        <CtiLabel cti={task.cti} categories={categories} />
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
-                  <StatusBadge status={task.status} />
-                  <button
-                    onClick={() => handleDelete(task._id)}
-                    style={{
-                      color: '#ff3a3a',
-                      borderColor: '#ff3a3a',
-                      padding: '0.2rem 0.6rem',
-                      fontSize: '0.68rem',
-                      letterSpacing: '0.08em',
-                    }}
+                ),
+              },
+              {
+                id: 'description',
+                header: 'Description',
+                cell: (item: Task) => item.description,
+              },
+              {
+                id: 'status',
+                header: 'Status',
+                cell: (item: Task) => (
+                  <StatusIndicator type={taskStatusType(item.status)}>
+                    {item.status.replace('_', ' ')}
+                  </StatusIndicator>
+                ),
+              },
+              {
+                id: 'assignee',
+                header: 'Assignee',
+                cell: (item: Task) => usernameFor(item.assignee_id) ?? '—',
+              },
+              {
+                id: 'actions',
+                header: 'Actions',
+                cell: (item: Task) => (
+                  <Button
+                    variant="inline-link"
+                    onClick={() => setDeleteModalTask(item)}
                   >
                     Delete
-                  </button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
+                  </Button>
+                ),
+              },
+            ]}
+            items={tasks}
+            empty={
+              <Box textAlign="center" color="text-body-secondary">
+                No tasks yet — create one above
+              </Box>
+            }
+            pagination={
+              totalPages > 1 ? (
+                <Pagination
+                  currentPageIndex={page}
+                  pagesCount={totalPages}
+                  onChange={({ detail }) => setPage(detail.currentPageIndex)}
+                />
+              ) : undefined
+            }
+          />
+        </SpaceBetween>
+      </ContentLayout>
 
-        {/* Pagination controls */}
-        {totalPages > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', marginTop: '1.5rem' }}>
-            <button
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1 || loading}
-              style={{
-                fontSize: '0.68rem',
-                letterSpacing: '0.08em',
-                padding: '0.25rem 0.75rem',
-                color: page <= 1 ? '#1e4470' : '#4a7aa7',
-                borderColor: page <= 1 ? '#1e4470' : '#4a7aa7',
-              }}
-            >
-              Prev
-            </button>
-            <span style={{ fontSize: '0.7rem', color: '#52809e', letterSpacing: '0.08em' }}>
-              Page {page} / {totalPages}
-            </span>
-            <button
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || loading}
-              style={{
-                fontSize: '0.68rem',
-                letterSpacing: '0.08em',
-                padding: '0.25rem 0.75rem',
-                color: page >= totalPages ? '#1e4470' : '#4a7aa7',
-                borderColor: page >= totalPages ? '#1e4470' : '#4a7aa7',
-              }}
-            >
-              Next
-            </button>
-          </div>
+      {/* Delete confirmation modal */}
+      <Modal
+        visible={deleteModalTask !== null}
+        onDismiss={() => setDeleteModalTask(null)}
+        header="Confirm Delete"
+        footer={
+          <Box float="right">
+            <SpaceBetween size="xs" direction="horizontal">
+              <Button variant="normal" onClick={() => setDeleteModalTask(null)}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={() => deleteModalTask && handleDelete(deleteModalTask._id)}
+              >
+                Delete
+              </Button>
+            </SpaceBetween>
+          </Box>
+        }
+      >
+        {deleteModalTask && (
+          <Box>
+            Are you sure you want to delete task "<strong>{deleteModalTask.title}</strong>"? This action cannot be undone.
+          </Box>
         )}
-      </div>
-    </>
-  )
-}
-
-// Resolves CTI IDs to human-readable "Category / Type / Item" label
-function CtiLabel({ cti, categories }: { cti: CtiSelection; categories: Category[] }) {
-  const [label, setLabel] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    const catName = categories.find((c) => c._id === cti.category_id)?.name ?? '?'
-
-    Promise.all([
-      api.get<CtiType[]>(`/api/cti/types?category_id=${cti.category_id}`),
-      api.get<CtiItem[]>(`/api/cti/items?type_id=${cti.type_id}`),
-    ])
-      .then(([typesRes, itemsRes]) => {
-        if (cancelled) return
-        const typeName = typesRes.data.find((t) => t._id === cti.type_id)?.name ?? '?'
-        const itemName = itemsRes.data.find((i) => i._id === cti.item_id)?.name ?? '?'
-        setLabel(`${catName} / ${typeName} / ${itemName}`)
-      })
-      .catch(() => { if (!cancelled) setLabel(null) })
-
-    return () => { cancelled = true }
-  }, [cti, categories])
-
-  if (!label) return null
-  return (
-    <span style={{ fontSize: '0.65rem', color: '#52809e', letterSpacing: '0.04em' }}>
-      [{label}]
-    </span>
+      </Modal>
+    </Layout>
   )
 }
