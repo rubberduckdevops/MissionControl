@@ -27,9 +27,11 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           direct_prompt: |
             Review this pull request focusing on:
+            - Following best practices
             - TypeScript type errors or unsafe patterns in the frontend
             - Rust correctness, panics, or unwrap() misuse in the backend
             - Security issues (auth, input validation, injection)
             - Logic bugs or edge cases
+
 
             Keep feedback concise and actionable. Skip style nits.
