@@ -1,12 +1,12 @@
+import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import CtiPage from '../pages/CtiPage'
 
-// Mock Navbar so it renders without auth context
-vi.mock('../components/Navbar', () => ({
-  default: () => <nav data-testid="navbar" />,
+vi.mock('../components/Layout', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
 // Mock the API module
@@ -119,7 +119,7 @@ describe('CtiPage', () => {
     renderCtiPage()
     await waitFor(() => screen.getByText('Malware'))
 
-    await userEvent.click(screen.getByRole('button', { name: 'DEL' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
 
     await waitFor(() => {
       expect(mockApi.delete).toHaveBeenCalledWith('/api/cti/categories/c1')

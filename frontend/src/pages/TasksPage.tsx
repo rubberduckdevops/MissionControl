@@ -388,11 +388,13 @@ export default function TasksPage() {
             }
             pagination={
               totalPages > 1 ? (
-                <Pagination
-                  currentPageIndex={page}
-                  pagesCount={totalPages}
-                  onChange={({ detail }) => setPage(detail.currentPageIndex)}
-                />
+                <div data-testid="task-pagination">
+                  <Pagination
+                    currentPageIndex={page}
+                    pagesCount={totalPages}
+                    onChange={({ detail }) => setPage(detail.currentPageIndex)}
+                  />
+                </div>
               ) : undefined
             }
           />
