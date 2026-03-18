@@ -20,7 +20,7 @@ pub async fn run_weather_poller(db: Db, nws_client: Arc<NwsClient>, interval_min
     }
 }
 
-async fn poll_all_locations(db: &Db, nws_client: &NwsClient) -> anyhow::Result<()> {
+pub async fn poll_all_locations(db: &Db, nws_client: &NwsClient) -> anyhow::Result<()> {
     let collection = db.collection::<WeatherLocation>("weather_locations");
     let mut cursor = collection.find(None, None).await?;
     while cursor.advance().await? {
