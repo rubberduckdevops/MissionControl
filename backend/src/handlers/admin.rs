@@ -40,7 +40,7 @@ pub async fn admin_list_users(
 ) -> AppResult<Json<Vec<UserPublic>>> {
     let collection = state.db.collection::<User>("users");
     let mut cursor = collection
-        .find(None, None)
+        .find(doc! {})
         .await
         .map_err(AppError::Database)?;
 
@@ -69,13 +69,10 @@ pub async fn admin_update_user(
         set_doc.insert("username", username);
     }
 
-    let options = mongodb::options::FindOneAndUpdateOptions::builder()
-        .return_document(mongodb::options::ReturnDocument::After)
-        .build();
-
     let collection = state.db.collection::<User>("users");
     let user = collection
-        .find_one_and_update(doc! { "_id": &id }, doc! { "$set": set_doc }, options)
+        .find_one_and_update(doc! { "_id": &id }, doc! { "$set": set_doc })
+        .return_document(mongodb::options::ReturnDocument::After)
         .await
         .map_err(|e| {
             if is_duplicate_key(&e) {
@@ -107,17 +104,13 @@ pub async fn admin_update_role(
         ));
     }
 
-    let options = mongodb::options::FindOneAndUpdateOptions::builder()
-        .return_document(mongodb::options::ReturnDocument::After)
-        .build();
-
     let collection = state.db.collection::<User>("users");
     let user = collection
         .find_one_and_update(
             doc! { "_id": &id },
             doc! { "$set": { "role": &payload.role, "updated_at": to_bson(&Utc::now()).unwrap() } },
-            options,
         )
+        .return_document(mongodb::options::ReturnDocument::After)
         .await
         .map_err(AppError::Database)?
         .ok_or(AppError::NotFound)?;
@@ -138,7 +131,7 @@ pub async fn admin_delete_user(
 
     let collection = state.db.collection::<User>("users");
     let result = collection
-        .delete_one(doc! { "_id": &id }, None)
+        .delete_one(doc! { "_id": &id })
         .await
         .map_err(AppError::Database)?;
 

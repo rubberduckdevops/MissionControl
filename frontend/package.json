@@ -21,7 +21,9 @@
     "remark-gfm": "^4.0.1"
   },
   "overrides": {
-    "undici": ">=7.24.0"
+    "undici": ">=7.24.0",
+    "esbuild": ">=0.25.0",
+    "rollup": ">=4.59.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",

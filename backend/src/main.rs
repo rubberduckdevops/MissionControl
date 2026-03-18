@@ -41,12 +41,12 @@ async fn main() -> Result<()> {
             .keys(doc! { field: 1 })
             .options(opts)
             .build();
-        users.create_index(index, None).await?;
+        users.create_index(index).await?;
     }
 
     // Weather: index locations by user, alerts by nws_id (unique for deduplication)
     db.collection::<bson::Document>("weather_locations")
-        .create_index(IndexModel::builder().keys(doc! { "user_id": 1 }).build(), None)
+        .create_index(IndexModel::builder().keys(doc! { "user_id": 1 }).build())
         .await?;
     db.collection::<bson::Document>("weather_alerts")
         .create_index(
@@ -54,7 +54,6 @@ async fn main() -> Result<()> {
                 .keys(doc! { "nws_id": 1 })
                 .options(IndexOptions::builder().unique(true).build())
                 .build(),
-            None,
         )
         .await?;
     db.collection::<bson::Document>("weather_alerts")
@@ -62,7 +61,6 @@ async fn main() -> Result<()> {
             IndexModel::builder()
                 .keys(doc! { "location_id": 1, "fetched_at": -1 })
                 .build(),
-            None,
         )
         .await?;
     db.collection::<bson::Document>("weather_observations")
@@ -70,7 +68,6 @@ async fn main() -> Result<()> {
             IndexModel::builder()
                 .keys(doc! { "location_id": 1, "timestamp": -1 })
                 .build(),
-            None,
         )
         .await?;
     // TTL: auto-expire observations older than 48 hours
@@ -80,7 +77,6 @@ async fn main() -> Result<()> {
                 .keys(doc! { "fetched_at": 1 })
                 .options(IndexOptions::builder().expire_after(std::time::Duration::from_secs(172800)).build())
                 .build(),
-            None,
         )
         .await?;
     tracing::info!("MongoDB indexes ensured");

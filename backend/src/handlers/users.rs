@@ -1,4 +1,5 @@
 use axum::{extract::State, Json};
+use bson::doc;
 
 use crate::{
     errors::AppResult,
@@ -12,7 +13,7 @@ pub async fn list_users(
 ) -> AppResult<Json<Vec<UserPublic>>> {
     let collection = state.db.collection::<User>("users");
     let mut cursor = collection
-        .find(None, None)
+        .find(doc! {})
         .await
         .map_err(crate::errors::AppError::Database)?;
 
