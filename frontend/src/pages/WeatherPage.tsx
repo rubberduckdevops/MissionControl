@@ -85,6 +85,8 @@ export default function WeatherPage() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
 
+  const [polling, setPolling] = useState(false)
+
   const [showAddModal, setShowAddModal] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [newLat, setNewLat] = useState('')
@@ -161,6 +163,22 @@ export default function WeatherPage() {
     } catch {}
   }
 
+  const handlePollNow = async () => {
+    setPolling(true)
+    try {
+      await api.post('/api/weather/poll')
+      // Re-fetch locations so last_polled_at updates after a short delay
+      setTimeout(() => {
+        api.get<WeatherLocation[]>('/api/weather/locations')
+          .then((res) => setLocations(res.data))
+          .catch(() => {})
+          .finally(() => setPolling(false))
+      }, 2000)
+    } catch {
+      setPolling(false)
+    }
+  }
+
   const latestObs = observations[0] ?? null
 
   return (
@@ -170,12 +188,22 @@ export default function WeatherPage() {
           <Header
             variant="h1"
             actions={
-              <Button
-                variant="primary"
-                onClick={() => { setShowAddModal(true); setAddError('') }}
-              >
-                + Add Location
-              </Button>
+              <SpaceBetween size="xs" direction="horizontal">
+                <Button
+                  variant="normal"
+                  loading={polling}
+                  loadingText="Polling..."
+                  onClick={handlePollNow}
+                >
+                  Refresh Now
+                </Button>
+                <Button
+                  variant="primary"
+                  onClick={() => { setShowAddModal(true); setAddError('') }}
+                >
+                  + Add Location
+                </Button>
+              </SpaceBetween>
             }
           >
             Weather Locations

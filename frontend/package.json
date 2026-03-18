@@ -20,6 +20,9 @@
     "react-router-dom": "^6.26.0",
     "remark-gfm": "^4.0.1"
   },
+  "overrides": {
+    "undici": ">=7.24.0"
+  },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

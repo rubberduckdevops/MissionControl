@@ -49,7 +49,7 @@ use crate::{
         users::list_users,
         weather::{
             create_weather_location, delete_weather_location, get_location_alerts,
-            get_location_observations, list_weather_locations,
+            get_location_observations, list_weather_locations, trigger_weather_poll,
         },
     },
     middleware::{admin::require_admin, auth::require_auth},
@@ -116,6 +116,7 @@ pub fn build_router(pool: Db, nws_client: Arc<NwsClient>) -> Router {
         .route("/api/weather/locations/:id", delete(delete_weather_location))
         .route("/api/weather/locations/:id/alerts", get(get_location_alerts))
         .route("/api/weather/locations/:id/observations", get(get_location_observations))
+        .route("/api/weather/poll", post(trigger_weather_poll))
         .merge(admin_routes)
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 

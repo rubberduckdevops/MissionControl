@@ -11,6 +11,7 @@ use crate::{
     errors::{AppError, AppResult},
     handlers::auth::{AppState, Claims},
     models::weather::{WeatherAlert, WeatherLocation, WeatherObservation},
+    weather_poller,
 };
 
 #[derive(Debug, Deserialize)]
@@ -144,6 +145,20 @@ async fn verify_location_ownership(
         return Err(AppError::Forbidden);
     }
     Ok(location)
+}
+
+pub async fn trigger_weather_poll(
+    axum::Extension(_claims): axum::Extension<Claims>,
+    State(state): State<AppState>,
+) -> AppResult<StatusCode> {
+    let db = state.db.clone();
+    let nws = state.nws_client.clone();
+    tokio::spawn(async move {
+        if let Err(e) = weather_poller::poll_all_locations(&db, &nws).await {
+            tracing::error!("Manual poll failed: {e:?}");
+        }
+    });
+    Ok(StatusCode::ACCEPTED)
 }
 
 #[cfg(test)]
