@@ -4,7 +4,6 @@ use axum::{
     Json,
 };
 use bson::doc;
-use mongodb::options::FindOptions;
 use serde::Deserialize;
 
 use crate::{
@@ -37,7 +36,7 @@ pub async fn list_weather_locations(
 ) -> AppResult<Json<Vec<WeatherLocation>>> {
     let collection = state.db.collection::<WeatherLocation>("weather_locations");
     let mut cursor = collection
-        .find(doc! { "user_id": &claims.sub }, None)
+        .find(doc! { "user_id": &claims.sub })
         .await
         .map_err(AppError::Database)?;
 
@@ -58,7 +57,7 @@ pub async fn create_weather_location(
     let location = WeatherLocation::new(claims.sub, payload.label, payload.lat, payload.lon);
     let collection = state.db.collection::<WeatherLocation>("weather_locations");
     collection
-        .insert_one(&location, None)
+        .insert_one(&location)
         .await
         .map_err(AppError::Database)?;
     Ok((StatusCode::CREATED, Json(location)))
@@ -71,7 +70,7 @@ pub async fn delete_weather_location(
 ) -> AppResult<StatusCode> {
     let collection = state.db.collection::<WeatherLocation>("weather_locations");
     let result = collection
-        .delete_one(doc! { "_id": &id, "user_id": &claims.sub }, None)
+        .delete_one(doc! { "_id": &id, "user_id": &claims.sub })
         .await
         .map_err(AppError::Database)?;
 
@@ -89,12 +88,10 @@ pub async fn get_location_alerts(
     verify_location_ownership(&state, &id, &claims.sub).await?;
 
     let collection = state.db.collection::<WeatherAlert>("weather_alerts");
-    let opts = FindOptions::builder()
+    let mut cursor = collection
+        .find(doc! { "location_id": &id })
         .sort(doc! { "fetched_at": -1 })
         .limit(100)
-        .build();
-    let mut cursor = collection
-        .find(doc! { "location_id": &id }, opts)
         .await
         .map_err(AppError::Database)?;
 
@@ -113,12 +110,10 @@ pub async fn get_location_observations(
     verify_location_ownership(&state, &id, &claims.sub).await?;
 
     let collection = state.db.collection::<WeatherObservation>("weather_observations");
-    let opts = FindOptions::builder()
+    let mut cursor = collection
+        .find(doc! { "location_id": &id })
         .sort(doc! { "timestamp": -1 })
         .limit(48)
-        .build();
-    let mut cursor = collection
-        .find(doc! { "location_id": &id }, opts)
         .await
         .map_err(AppError::Database)?;
 
@@ -136,7 +131,7 @@ async fn verify_location_ownership(
 ) -> AppResult<WeatherLocation> {
     let collection = state.db.collection::<WeatherLocation>("weather_locations");
     let location = collection
-        .find_one(doc! { "_id": location_id }, None)
+        .find_one(doc! { "_id": location_id })
         .await
         .map_err(AppError::Database)?
         .ok_or(AppError::NotFound)?;

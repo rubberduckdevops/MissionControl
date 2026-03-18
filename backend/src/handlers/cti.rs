@@ -50,7 +50,7 @@ pub async fn list_categories(
     State(state): State<AppState>,
 ) -> AppResult<Json<Vec<Category>>> {
     let col = state.db.collection::<Category>("cti_categories");
-    let mut cursor = col.find(None, None).await.map_err(AppError::Database)?;
+    let mut cursor = col.find(doc! {}).await.map_err(AppError::Database)?;
 
     let mut items = Vec::new();
     while cursor.advance().await.map_err(AppError::Database)? {
@@ -66,7 +66,7 @@ pub async fn create_category(
 ) -> AppResult<(StatusCode, Json<Category>)> {
     let category = Category::new(payload.name);
     let col = state.db.collection::<Category>("cti_categories");
-    col.insert_one(&category, None)
+    col.insert_one(&category)
         .await
         .map_err(AppError::Database)?;
     Ok((StatusCode::CREATED, Json(category)))
@@ -79,7 +79,7 @@ pub async fn delete_category(
 ) -> AppResult<StatusCode> {
     let col = state.db.collection::<Category>("cti_categories");
     let result = col
-        .delete_one(doc! { "_id": &id }, None)
+        .delete_one(doc! { "_id": &id })
         .await
         .map_err(AppError::Database)?;
     if result.deleted_count == 0 {
@@ -97,7 +97,7 @@ pub async fn list_types(
 ) -> AppResult<Json<Vec<CtiType>>> {
     let col = state.db.collection::<CtiType>("cti_types");
     let mut cursor = col
-        .find(doc! { "category_id": &filter.category_id }, None)
+        .find(doc! { "category_id": &filter.category_id })
         .await
         .map_err(AppError::Database)?;
 
@@ -115,7 +115,7 @@ pub async fn create_type(
 ) -> AppResult<(StatusCode, Json<CtiType>)> {
     let cti_type = CtiType::new(payload.name, payload.category_id);
     let col = state.db.collection::<CtiType>("cti_types");
-    col.insert_one(&cti_type, None)
+    col.insert_one(&cti_type)
         .await
         .map_err(AppError::Database)?;
     Ok((StatusCode::CREATED, Json(cti_type)))
@@ -128,7 +128,7 @@ pub async fn delete_type(
 ) -> AppResult<StatusCode> {
     let col = state.db.collection::<CtiType>("cti_types");
     let result = col
-        .delete_one(doc! { "_id": &id }, None)
+        .delete_one(doc! { "_id": &id })
         .await
         .map_err(AppError::Database)?;
     if result.deleted_count == 0 {
@@ -146,7 +146,7 @@ pub async fn list_items(
 ) -> AppResult<Json<Vec<CtiItem>>> {
     let col = state.db.collection::<CtiItem>("cti_items");
     let mut cursor = col
-        .find(doc! { "type_id": &filter.type_id }, None)
+        .find(doc! { "type_id": &filter.type_id })
         .await
         .map_err(AppError::Database)?;
 
@@ -164,7 +164,7 @@ pub async fn create_item(
 ) -> AppResult<(StatusCode, Json<CtiItem>)> {
     let item = CtiItem::new(payload.name, payload.type_id);
     let col = state.db.collection::<CtiItem>("cti_items");
-    col.insert_one(&item, None)
+    col.insert_one(&item)
         .await
         .map_err(AppError::Database)?;
     Ok((StatusCode::CREATED, Json(item)))
@@ -177,7 +177,7 @@ pub async fn delete_item(
 ) -> AppResult<StatusCode> {
     let col = state.db.collection::<CtiItem>("cti_items");
     let result = col
-        .delete_one(doc! { "_id": &id }, None)
+        .delete_one(doc! { "_id": &id })
         .await
         .map_err(AppError::Database)?;
     if result.deleted_count == 0 {

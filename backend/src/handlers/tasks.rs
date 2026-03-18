@@ -5,7 +5,6 @@ use axum::{
 };
 use bson::{doc, to_bson};
 use chrono::Utc;
-use mongodb::options::FindOptions;
 use serde::{Deserialize, Deserializer};
 
 use crate::{
@@ -80,19 +79,16 @@ pub async fn list_tasks(
     let collection = state.db.collection::<Task>("tasks");
 
     let total = collection
-        .count_documents(filter.clone(), None)
+        .count_documents(filter.clone())
         .await
         .map_err(AppError::Database)?;
 
     let skip = (params.page - 1) * params.limit;
-    let options = FindOptions::builder()
+    let mut cursor = collection
+        .find(filter)
         .skip(skip)
         .limit(params.limit as i64)
         .sort(doc! { "created_at": -1 })
-        .build();
-
-    let mut cursor = collection
-        .find(filter, options)
         .await
         .map_err(AppError::Database)?;
 
@@ -127,7 +123,7 @@ pub async fn create_task(
 
     let collection = state.db.collection::<Task>("tasks");
     collection
-        .insert_one(&task, None)
+        .insert_one(&task)
         .await
         .map_err(AppError::Database)?;
     Ok((StatusCode::CREATED, Json(task)))
@@ -140,7 +136,7 @@ pub async fn get_task(
 ) -> AppResult<Json<Task>> {
     let collection = state.db.collection::<Task>("tasks");
     let task = collection
-        .find_one(doc! { "_id": &id }, None)
+        .find_one(doc! { "_id": &id })
         .await
         .map_err(AppError::Database)?
         .ok_or(AppError::NotFound)?;
@@ -183,12 +179,9 @@ pub async fn update_task(
         };
     }
 
-    let options = mongodb::options::FindOneAndUpdateOptions::builder()
-        .return_document(mongodb::options::ReturnDocument::After)
-        .build();
-
     let task = collection
-        .find_one_and_update(doc! { "_id": &id }, doc! { "$set": set_doc }, options)
+        .find_one_and_update(doc! { "_id": &id }, doc! { "$set": set_doc })
+        .return_document(mongodb::options::ReturnDocument::After)
         .await
         .map_err(AppError::Database)?
         .ok_or(AppError::NotFound)?;
@@ -203,7 +196,7 @@ pub async fn delete_task(
 ) -> AppResult<StatusCode> {
     let collection = state.db.collection::<Task>("tasks");
     let result = collection
-        .delete_one(doc! { "_id": &id }, None)
+        .delete_one(doc! { "_id": &id })
         .await
         .map_err(AppError::Database)?;
 
@@ -223,16 +216,12 @@ pub async fn add_note(
     let note_bson = to_bson(&note).map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
 
     let collection = state.db.collection::<Task>("tasks");
-    let options = mongodb::options::FindOneAndUpdateOptions::builder()
-        .return_document(mongodb::options::ReturnDocument::After)
-        .build();
-
     let task = collection
         .find_one_and_update(
             doc! { "_id": &id },
             doc! { "$push": { "notes": note_bson }, "$set": { "updated_at": to_bson(&Utc::now()).unwrap() } },
-            options,
         )
+        .return_document(mongodb::options::ReturnDocument::After)
         .await
         .map_err(AppError::Database)?
         .ok_or(AppError::NotFound)?;
@@ -246,10 +235,6 @@ pub async fn delete_note(
     Path((task_id, note_id)): Path<(String, String)>,
 ) -> AppResult<Json<Task>> {
     let collection = state.db.collection::<Task>("tasks");
-    let options = mongodb::options::FindOneAndUpdateOptions::builder()
-        .return_document(mongodb::options::ReturnDocument::After)
-        .build();
-
     let task = collection
         .find_one_and_update(
             doc! { "_id": &task_id },
@@ -257,8 +242,8 @@ pub async fn delete_note(
                 "$pull": { "notes": { "_id": &note_id } },
                 "$set": { "updated_at": to_bson(&Utc::now()).unwrap() }
             },
-            options,
         )
+        .return_document(mongodb::options::ReturnDocument::After)
         .await
         .map_err(AppError::Database)?
         .ok_or(AppError::NotFound)?;

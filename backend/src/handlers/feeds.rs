@@ -38,7 +38,7 @@ pub async fn list_feeds(
 ) -> AppResult<Json<Vec<Feed>>> {
     let collection = state.db.collection::<Feed>("feeds");
     let mut cursor = collection
-        .find(doc! { "user_id": &claims.sub }, None)
+        .find(doc! { "user_id": &claims.sub })
         .await
         .map_err(AppError::Database)?;
 
@@ -57,7 +57,7 @@ pub async fn add_feed(
     let feed = Feed::new(claims.sub, payload.name, payload.url);
     let collection = state.db.collection::<Feed>("feeds");
     collection
-        .insert_one(&feed, None)
+        .insert_one(&feed)
         .await
         .map_err(AppError::Database)?;
     Ok((StatusCode::CREATED, Json(feed)))
@@ -70,7 +70,7 @@ pub async fn delete_feed(
 ) -> AppResult<StatusCode> {
     let collection = state.db.collection::<Feed>("feeds");
     let result = collection
-        .delete_one(doc! { "_id": &id, "user_id": &claims.sub }, None)
+        .delete_one(doc! { "_id": &id, "user_id": &claims.sub })
         .await
         .map_err(AppError::Database)?;
 
@@ -87,7 +87,7 @@ pub async fn get_feed_items(
 ) -> AppResult<Json<FeedItemsResponse>> {
     let collection = state.db.collection::<Feed>("feeds");
     let feed = collection
-        .find_one(doc! { "_id": &id, "user_id": &claims.sub }, None)
+        .find_one(doc! { "_id": &id, "user_id": &claims.sub })
         .await
         .map_err(AppError::Database)?
         .ok_or(AppError::NotFound)?;

@@ -82,7 +82,7 @@ pub async fn register(
     let user = User::new(payload.email, payload.username, password_hash);
     let collection = state.db.collection::<User>("users");
 
-    collection.insert_one(&user, None).await.map_err(|e| {
+    collection.insert_one(&user).await.map_err(|e| {
         if is_duplicate_key(&e) {
             AppError::Conflict("Email or username already taken".into())
         } else {
@@ -103,7 +103,7 @@ pub async fn login(
 ) -> AppResult<Json<AuthResponse>> {
     let collection = state.db.collection::<User>("users");
     let user = collection
-        .find_one(doc! { "email": &payload.email }, None)
+        .find_one(doc! { "email": &payload.email })
         .await?
         .ok_or(AppError::Unauthorized)?;
 
@@ -125,7 +125,7 @@ pub async fn me(
 ) -> AppResult<Json<UserPublic>> {
     let collection = state.db.collection::<User>("users");
     let user = collection
-        .find_one(doc! { "_id": &claims.sub }, None)
+        .find_one(doc! { "_id": &claims.sub })
         .await?
         .ok_or(AppError::NotFound)?;
     Ok(Json(user.into()))

@@ -22,7 +22,7 @@ pub async fn run_weather_poller(db: Db, nws_client: Arc<NwsClient>, interval_min
 
 pub async fn poll_all_locations(db: &Db, nws_client: &NwsClient) -> anyhow::Result<()> {
     let collection = db.collection::<WeatherLocation>("weather_locations");
-    let mut cursor = collection.find(None, None).await?;
+    let mut cursor = collection.find(doc! {}).await?;
     while cursor.advance().await? {
         let loc = cursor.deserialize_current()?;
         let loc_id = loc.id.clone();
@@ -48,7 +48,6 @@ async fn poll_location(db: &Db, nws_client: &NwsClient, loc: WeatherLocation) ->
         .update_one(
             doc! { "_id": &loc.id },
             doc! { "$set": { "last_polled_at": bson::DateTime::from_chrono(Utc::now()) } },
-            None,
         )
         .await?;
 
@@ -81,7 +80,6 @@ async fn ensure_points_resolved(
                 "forecast_office": &metadata.cwa,
                 "observation_station_id": &station_id,
             }},
-            None,
         )
         .await?;
 
@@ -127,8 +125,8 @@ async fn fetch_and_store_alerts(
             .update_one(
                 doc! { "nws_id": &nws_id },
                 doc! { "$setOnInsert": alert_doc },
-                mongodb::options::UpdateOptions::builder().upsert(true).build(),
             )
+            .upsert(true)
             .await?;
     }
     Ok(())
@@ -159,7 +157,7 @@ async fn fetch_and_store_observation(
     );
 
     db.collection::<WeatherObservation>("weather_observations")
-        .insert_one(&observation, None)
+        .insert_one(&observation)
         .await?;
 
     Ok(())
