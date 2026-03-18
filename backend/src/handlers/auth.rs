@@ -9,11 +9,13 @@ use chrono::{Duration, Utc};
 use jsonwebtoken::{encode, EncodingKey, Header};
 use mongodb::Database;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 use crate::{
     config::AppConfig,
     errors::{AppError, AppResult},
     models::user::{User, UserPublic},
+    nws_client::NwsClient,
 };
 
 #[derive(Deserialize)]
@@ -59,6 +61,7 @@ pub struct AuthResponse {
 pub struct AppState {
     pub db: Database,
     pub config: AppConfig,
+    pub nws_client: Arc<NwsClient>,
 }
 
 pub async fn register(

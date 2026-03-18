@@ -7,6 +7,7 @@ import TaskDetailPage from './pages/TaskDetailPage'
 import CtiPage from './pages/CtiPage'
 import AdminPage from './pages/AdminPage'
 import FeedsPage from './pages/FeedsPage'
+import WeatherPage from './pages/WeatherPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
 
@@ -61,6 +62,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <FeedsPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/weather"
+          element={
+            <PrivateRoute>
+              <WeatherPage />
             </PrivateRoute>
           }
         />

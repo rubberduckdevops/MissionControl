@@ -24,6 +24,7 @@ export default function Layout({ children }: Props) {
     { type: 'link', text: 'Tasks', href: '/tasks' },
     { type: 'link', text: 'CTI', href: '/cti' },
     { type: 'link', text: 'Feeds', href: '/feeds' },
+    { type: 'link', text: 'Weather', href: '/weather' },
   ]
 
   if (user?.role === 'admin') {
