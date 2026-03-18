@@ -47,14 +47,20 @@ use crate::{
         health::health_check,
         tasks::{add_note, create_task, delete_note, delete_task, get_task, list_tasks, update_task},
         users::list_users,
+        weather::{
+            create_weather_location, delete_weather_location, get_location_alerts,
+            get_location_observations, list_weather_locations,
+        },
     },
     middleware::{admin::require_admin, auth::require_auth},
+    nws_client::NwsClient,
 };
 
-pub fn build_router(pool: Db) -> Router {
+pub fn build_router(pool: Db, nws_client: Arc<NwsClient>) -> Router {
     let state = AppState {
         db: pool,
         config: AppConfig::from_env(),
+        nws_client,
     };
 
     // Rate limit: 10 req/min per IP (1 token/6s, burst of 10).
@@ -106,6 +112,10 @@ pub fn build_router(pool: Db) -> Router {
         .route("/api/feeds", get(list_feeds).post(add_feed))
         .route("/api/feeds/:id", delete(delete_feed))
         .route("/api/feeds/:id/items", get(get_feed_items))
+        .route("/api/weather/locations", get(list_weather_locations).post(create_weather_location))
+        .route("/api/weather/locations/:id", delete(delete_weather_location))
+        .route("/api/weather/locations/:id/alerts", get(get_location_alerts))
+        .route("/api/weather/locations/:id/observations", get(get_location_observations))
         .merge(admin_routes)
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
