@@ -1,11 +1,12 @@
+import React from 'react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import TasksPage from '../pages/TasksPage'
 
-vi.mock('../components/Navbar', () => ({
-  default: () => <nav data-testid="navbar" />,
+vi.mock('../components/Layout', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }))
 
 vi.mock('../services/api', () => {
@@ -71,7 +72,7 @@ describe('TasksPage', () => {
   it('renders the page heading and new task form', async () => {
     renderTasksPage()
     await waitFor(() => {
-      expect(screen.getByText('Tasks')).toBeInTheDocument()
+      expect(screen.getAllByText('Tasks').length).toBeGreaterThan(0)
       expect(screen.getByText('New Task')).toBeInTheDocument()
     })
   })
@@ -79,10 +80,10 @@ describe('TasksPage', () => {
   it('renders assignee and CTI dropdowns in the create form', async () => {
     renderTasksPage()
     await waitFor(() => {
-      expect(screen.getByText('Assignee')).toBeInTheDocument()
-      expect(screen.getByText('Category')).toBeInTheDocument()
-      expect(screen.getByText('Type')).toBeInTheDocument()
-      expect(screen.getByText('Item')).toBeInTheDocument()
+      expect(screen.getAllByText('Assignee').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Category').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Type').length).toBeGreaterThan(0)
+      expect(screen.getAllByText('Item').length).toBeGreaterThan(0)
     })
   })
 
@@ -116,6 +117,11 @@ describe('TasksPage', () => {
     })
 
     renderTasksPage()
+    // Open the Assignee select to reveal options in CloudScape's custom dropdown
+    await waitFor(() => screen.getAllByText('Assignee')[0])
+    const assigneeButton = screen.getByRole('button', { name: /Unassigned/i })
+    await userEvent.click(assigneeButton)
+
     await waitFor(() => {
       expect(screen.getByRole('option', { name: 'alice' })).toBeInTheDocument()
     })
@@ -142,7 +148,7 @@ describe('TasksPage', () => {
     })
   })
 
-  it('deletes a task', async () => {
+  it('deletes a task after confirming the modal', async () => {
     mockApi.get.mockImplementation((url: string) => {
       if (url === '/api/tasks') return Promise.resolve({ data: paginatedWithTask })
       return Promise.resolve({ data: [] })
@@ -152,7 +158,14 @@ describe('TasksPage', () => {
     renderTasksPage()
     await waitFor(() => screen.getByText('Test Task'))
 
-    await userEvent.click(screen.getByRole('button', { name: 'Delete' }))
+    // Click the inline Delete button (first one) to open the confirmation modal
+    const deleteButtons = screen.getAllByRole('button', { name: 'Delete' })
+    await userEvent.click(deleteButtons[0])
+
+    // Confirm in the modal — click the last Delete button (the modal confirm)
+    await waitFor(() => screen.getByText('Confirm Delete'))
+    const allDeleteButtons = screen.getAllByRole('button', { name: 'Delete' })
+    await userEvent.click(allDeleteButtons[allDeleteButtons.length - 1])
 
     await waitFor(() => {
       expect(mockApi.delete).toHaveBeenCalledWith('/api/tasks/t1')
@@ -176,18 +189,18 @@ describe('TasksPage', () => {
   it('renders filter toggle buttons for each status', async () => {
     renderTasksPage()
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'TODO' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'IN PROGRESS' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'DONE' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Todo' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'In Progress' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument()
     })
   })
 
   it('toggles a status filter and resets to page 1', async () => {
     const user = userEvent.setup()
     renderTasksPage()
-    await waitFor(() => screen.getByRole('button', { name: 'DONE' }))
+    await waitFor(() => screen.getByRole('button', { name: 'Done' }))
 
-    await user.click(screen.getByRole('button', { name: 'DONE' }))
+    await user.click(screen.getByRole('button', { name: 'Done' }))
 
     await waitFor(() => {
       const taskCalls = mockApi.get.mock.calls.filter(
@@ -202,7 +215,7 @@ describe('TasksPage', () => {
   it('does not render pagination controls when total_pages is 1', async () => {
     renderTasksPage()
     await waitFor(() => {
-      expect(screen.queryByText(/Page \d/)).not.toBeInTheDocument()
+      expect(screen.queryByTestId('task-pagination')).not.toBeInTheDocument()
     })
   })
 
@@ -218,9 +231,7 @@ describe('TasksPage', () => {
 
     renderTasksPage()
     await waitFor(() => {
-      expect(screen.getByText('Page 1 / 2')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Prev' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument()
+      expect(screen.getByTestId('task-pagination')).toBeInTheDocument()
     })
   })
 
@@ -236,8 +247,9 @@ describe('TasksPage', () => {
     })
 
     renderTasksPage()
-    await waitFor(() => screen.getByRole('button', { name: 'Next' }))
-    await user.click(screen.getByRole('button', { name: 'Next' }))
+    await waitFor(() => screen.getByTestId('task-pagination'))
+    // Click the page 2 button to navigate to next page
+    await user.click(screen.getByRole('button', { name: '2' }))
 
     await waitFor(() => {
       const taskCalls = mockApi.get.mock.calls.filter(
