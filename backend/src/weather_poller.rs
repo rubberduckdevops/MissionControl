@@ -47,7 +47,7 @@ async fn poll_location(db: &Db, nws_client: &NwsClient, loc: WeatherLocation) ->
     db.collection::<bson::Document>("weather_locations")
         .update_one(
             doc! { "_id": &loc.id },
-            doc! { "$set": { "last_polled_at": bson::DateTime::from_chrono(Utc::now()) } },
+            doc! { "$set": { "last_polled_at": Utc::now().to_rfc3339() } },
             None,
         )
         .await?;
