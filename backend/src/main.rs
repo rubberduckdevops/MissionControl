@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
     };
 
     let intermediate_cert_der: Arc<Vec<u8>> = {
-        match tokio::fs::read("certs/intermediate_ca.crt").await {
+        match tokio::fs::read(&app_config.step_ca_intermediate_cert).await {
             Ok(pem_bytes) => match parse_x509_pem(&pem_bytes) {
                 Ok((_, pem)) => Arc::new(pem.contents),
                 Err(e) => {
@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
                 }
             },
             Err(e) => {
-                tracing::warn!("Could not read intermediate CA cert: {e}");
+                tracing::warn!("Could not read intermediate CA cert at '{}': {e}", app_config.step_ca_intermediate_cert);
                 Arc::new(Vec::new())
             }
         }

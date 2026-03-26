@@ -19,7 +19,12 @@ pub struct CertStatusResponse {
     pub status: String,
 }
 
+const ALLOWED_CA_PATHS: &[&str] = &["/health", "/roots", "/1.0/crl", "/1.0/provisioners"];
+
 async fn proxy_ca(state: &AppState, path: &str) -> AppResult<Json<serde_json::Value>> {
+    if !ALLOWED_CA_PATHS.contains(&path) {
+        return Err(AppError::BadRequest(format!("CA path not permitted: {path}")));
+    }
     let url = format!("{}{}", state.config.step_ca_url, path);
 
     let response = state
@@ -75,7 +80,10 @@ pub async fn ca_cert_status(
     let not_before_ts = cert.validity().not_before.timestamp();
     let not_after_ts = cert.validity().not_after.timestamp();
     let now_ts = Utc::now().timestamp();
-    let days_remaining = (not_after_ts - now_ts) / 86400;
+    let days_remaining = not_after_ts
+        .checked_sub(now_ts)
+        .map(|diff| diff / 86400)
+        .unwrap_or(i64::MIN);
 
     let status = if days_remaining < 0 {
         "expired"
@@ -97,13 +105,13 @@ pub async fn ca_cert_status(
         .timestamp_opt(not_before_ts, 0)
         .single()
         .map(|dt| dt.to_rfc3339())
-        .unwrap_or_default();
+        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("Invalid not_before timestamp in cert")))?;
 
     let not_after = Utc
         .timestamp_opt(not_after_ts, 0)
         .single()
         .map(|dt| dt.to_rfc3339())
-        .unwrap_or_default();
+        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("Invalid not_after timestamp in cert")))?;
 
     Ok(Json(CertStatusResponse {
         subject: cert.subject().to_string(),

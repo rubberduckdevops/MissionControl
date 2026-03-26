@@ -10,6 +10,7 @@ pub struct AppConfig {
     pub weather_poll_interval_minutes: u64,
     pub step_ca_url: String,
     pub step_ca_root_cert: String,
+    pub step_ca_intermediate_cert: String,
 }
 
 impl AppConfig {
@@ -27,6 +28,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "https://127.0.0.1:9000".to_string()),
             step_ca_root_cert: env::var("STEP_CA_ROOT_CERT")
                 .unwrap_or_else(|_| "/etc/step-ca/certs/root_ca.crt".to_string()),
+            step_ca_intermediate_cert: env::var("STEP_CA_INTERMEDIATE_CERT")
+                .unwrap_or_else(|_| "/etc/step-ca/certs/intermediate_ca.crt".to_string()),
         }
     }
 }

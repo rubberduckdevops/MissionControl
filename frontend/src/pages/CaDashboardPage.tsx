@@ -64,19 +64,25 @@ export default function CaDashboardPage() {
     await Promise.allSettled([
       getCaHealth()
         .then((r) => setHealth({ data: r.data, error: null, loading: false }))
-        .catch(() => setHealth({ data: null, error: 'Failed to fetch CA health', loading: false })),
+        .catch((e: unknown) => setHealth({ data: null, error: `Failed to fetch CA health: ${e instanceof Error ? e.message : String(e)}`, loading: false })),
 
       getCaCertStatus()
         .then((r) => setCertStatus({ data: r.data, error: null, loading: false }))
-        .catch(() => setCertStatus({ data: null, error: 'Failed to fetch certificate status', loading: false })),
+        .catch((e: unknown) => setCertStatus({ data: null, error: `Failed to fetch certificate status: ${e instanceof Error ? e.message : String(e)}`, loading: false })),
 
       getCaProvisioners()
-        .then((r) => setProvisioners({ data: r.data.provisioners ?? [], error: null, loading: false }))
-        .catch(() => setProvisioners({ data: null, error: 'Failed to fetch provisioners', loading: false })),
+        .then((r) => {
+          if (r.data.provisioners === undefined) {
+            setProvisioners({ data: null, error: 'Provisioners missing from API response', loading: false })
+          } else {
+            setProvisioners({ data: r.data.provisioners, error: null, loading: false })
+          }
+        })
+        .catch((e: unknown) => setProvisioners({ data: null, error: `Failed to fetch provisioners: ${e instanceof Error ? e.message : String(e)}`, loading: false })),
 
       getCaCrl()
         .then((r) => setCrl({ data: r.data, error: null, loading: false }))
-        .catch(() => setCrl({ data: null, error: 'Failed to fetch CRL', loading: false })),
+        .catch((e: unknown) => setCrl({ data: null, error: `Failed to fetch CRL: ${e instanceof Error ? e.message : String(e)}`, loading: false })),
     ])
   }, [])
 
