@@ -9,6 +9,13 @@ use crate::{
 };
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CrlResponse {
+    pub this_update: Option<String>,
+    pub next_update: Option<String>,
+}
+
+#[derive(Serialize)]
 pub struct CertStatusResponse {
     pub subject: String,
     pub issuer: String,
@@ -62,8 +69,46 @@ pub async fn ca_roots(State(state): State<AppState>) -> AppResult<Json<serde_jso
     proxy_ca(&state, "/roots").await
 }
 
-pub async fn ca_crl(State(state): State<AppState>) -> AppResult<Json<serde_json::Value>> {
-    proxy_ca(&state, "/1.0/crl").await
+pub async fn ca_crl(State(state): State<AppState>) -> AppResult<Json<CrlResponse>> {
+    let url = state.config.step_ca_url.join("/1.0/crl").map_err(|e| {
+        AppError::Internal(anyhow::anyhow!("Failed to construct CA URL: {e}"))
+    })?;
+
+    let response = state
+        .ca_client
+        .get(url.clone())
+        .send()
+        .await
+        .map_err(|e| {
+            tracing::error!("CA unreachable at {url}: {e}");
+            AppError::ServiceUnavailable("CA is unreachable".to_string())
+        })?;
+
+    if !response.status().is_success() {
+        return Err(AppError::BadGateway("CA returned an unexpected response".to_string()));
+    }
+
+    let der = response.bytes().await.map_err(|e| {
+        tracing::error!("Failed to read CRL response body: {e}");
+        AppError::BadGateway("Failed to read CRL response".to_string())
+    })?;
+
+    let (_, crl) = CertificateRevocationList::from_der(&der).map_err(|e| {
+        tracing::error!("Failed to parse CRL DER: {e}");
+        AppError::BadGateway("Failed to parse CRL".to_string())
+    })?;
+
+    let ts_to_rfc3339 = |ts: i64| {
+        Utc.timestamp_opt(ts, 0)
+            .single()
+            .map(|dt| dt.to_rfc3339())
+    };
+
+    Ok(Json(CrlResponse {
+        this_update: ts_to_rfc3339(crl.tbs_cert_list.this_update.timestamp()),
+        next_update: crl.tbs_cert_list.next_update.as_ref()
+            .and_then(|t| ts_to_rfc3339(t.timestamp())),
+    }))
 }
 
 pub async fn ca_provisioners(
