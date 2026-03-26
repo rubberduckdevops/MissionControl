@@ -87,6 +87,14 @@ export default function Navbar() {
             >
               Feeds
             </Link>
+            <Link
+              to="/ca"
+              style={linkStyle('ca')}
+              onMouseEnter={() => setHoveredLink('ca')}
+              onMouseLeave={() => setHoveredLink(null)}
+            >
+              CA
+            </Link>
             {user.role === 'admin' && (
               <Link
                 to="/admin"

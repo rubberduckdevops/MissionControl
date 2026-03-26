@@ -8,6 +8,7 @@ import CtiPage from './pages/CtiPage'
 import AdminPage from './pages/AdminPage'
 import FeedsPage from './pages/FeedsPage'
 import WeatherPage from './pages/WeatherPage'
+import CaDashboardPage from './pages/CaDashboardPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
 
@@ -70,6 +71,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <WeatherPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/ca"
+          element={
+            <PrivateRoute>
+              <CaDashboardPage />
             </PrivateRoute>
           }
         />
