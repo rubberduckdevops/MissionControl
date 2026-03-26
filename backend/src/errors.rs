@@ -18,6 +18,10 @@ pub enum AppError {
     BadRequest(String),
     #[error("Conflict: {0}")]
     Conflict(String),
+    #[error("Service unavailable: {0}")]
+    ServiceUnavailable(String),
+    #[error("Bad gateway: {0}")]
+    BadGateway(String),
     #[error("Internal server error")]
     Internal(#[from] anyhow::Error),
     #[error("Database error")]
@@ -32,6 +36,8 @@ impl IntoResponse for AppError {
             AppError::Forbidden => (StatusCode::FORBIDDEN, self.to_string()),
             AppError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, msg.clone()),
+            AppError::ServiceUnavailable(msg) => (StatusCode::SERVICE_UNAVAILABLE, msg.clone()),
+            AppError::BadGateway(msg) => (StatusCode::BAD_GATEWAY, msg.clone()),
             AppError::Internal(e) => {
                 tracing::error!("Internal error: {e:?}");
                 (StatusCode::INTERNAL_SERVER_ERROR, "Internal server error".into())

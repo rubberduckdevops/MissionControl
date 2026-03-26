@@ -29,4 +29,5 @@ anyhow = "1"
 rand_core = { version = "0.6", features = ["std"] }
 constant_time_eq = "0.3"
 reqwest = { version = "0.13", features = ["native-tls", "json"], default-features = false }
+x509-parser = "0.16"
 feed-rs = "2"

@@ -2,8 +2,9 @@ use anyhow::Result;
 use dotenvy::dotenv;
 use mongodb::{Client, IndexModel, options::IndexOptions};
 use bson::doc;
-use std::{env, net::SocketAddr, sync::Arc};
+use std::{env, net::SocketAddr, sync::Arc, time::Duration};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use x509_parser::prelude::*;
 
 mod config;
 mod db;
@@ -93,7 +94,45 @@ async fn main() -> Result<()> {
         weather_poller::run_weather_poller(poller_db, poller_nws, poll_interval).await;
     });
 
-    let app = routes::build_router(db, nws);
+    let app_config = config::AppConfig::from_env();
+
+    let root_cert_pem = tokio::fs::read(&app_config.step_ca_root_cert)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!("Could not read step-ca root cert at '{}': {e}", app_config.step_ca_root_cert);
+            Vec::new()
+        });
+
+    let ca_client = {
+        let mut builder = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(5))
+            .timeout(Duration::from_secs(10));
+        if !root_cert_pem.is_empty() {
+            match reqwest::Certificate::from_pem(&root_cert_pem) {
+                Ok(cert) => builder = builder.add_root_certificate(cert),
+                Err(e) => tracing::warn!("Could not parse step-ca root cert: {e}"),
+            }
+        }
+        builder.build().expect("Failed to build CA reqwest client")
+    };
+
+    let intermediate_cert_der: Arc<Vec<u8>> = {
+        match tokio::fs::read("certs/intermediate_ca.crt").await {
+            Ok(pem_bytes) => match parse_x509_pem(&pem_bytes) {
+                Ok((_, pem)) => Arc::new(pem.contents),
+                Err(e) => {
+                    tracing::warn!("Could not parse intermediate CA cert PEM: {e}");
+                    Arc::new(Vec::new())
+                }
+            },
+            Err(e) => {
+                tracing::warn!("Could not read intermediate CA cert: {e}");
+                Arc::new(Vec::new())
+            }
+        }
+    };
+
+    let app = routes::build_router(db, nws, ca_client, intermediate_cert_der);
 
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{port}");

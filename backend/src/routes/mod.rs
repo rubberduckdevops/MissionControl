@@ -38,6 +38,7 @@ use crate::{
     handlers::{
         admin::{admin_delete_user, admin_list_users, admin_update_role, admin_update_user},
         auth::{login, me, register, AppState},
+        ca::{ca_cert_status, ca_crl, ca_health, ca_provisioners, ca_roots},
         cti::{
             create_category, create_item, create_type, delete_category, delete_item, delete_type,
             list_categories, list_items, list_types,
@@ -56,11 +57,18 @@ use crate::{
     nws_client::NwsClient,
 };
 
-pub fn build_router(pool: Db, nws_client: Arc<NwsClient>) -> Router {
+pub fn build_router(
+    pool: Db,
+    nws_client: Arc<NwsClient>,
+    ca_client: reqwest::Client,
+    intermediate_cert_der: Arc<Vec<u8>>,
+) -> Router {
     let state = AppState {
         db: pool,
         config: AppConfig::from_env(),
         nws_client,
+        ca_client,
+        intermediate_cert_der,
     };
 
     // Rate limit: 10 req/min per IP (1 token/6s, burst of 10).
@@ -117,6 +125,11 @@ pub fn build_router(pool: Db, nws_client: Arc<NwsClient>) -> Router {
         .route("/api/weather/locations/:id/alerts", get(get_location_alerts))
         .route("/api/weather/locations/:id/observations", get(get_location_observations))
         .route("/api/weather/poll", post(trigger_weather_poll))
+        .route("/api/ca/health", get(ca_health))
+        .route("/api/ca/roots", get(ca_roots))
+        .route("/api/ca/crl", get(ca_crl))
+        .route("/api/ca/provisioners", get(ca_provisioners))
+        .route("/api/ca/cert-status", get(ca_cert_status))
         .merge(admin_routes)
         .layer(middleware::from_fn_with_state(state.clone(), require_auth));
 
