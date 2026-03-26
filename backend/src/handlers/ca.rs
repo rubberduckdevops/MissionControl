@@ -25,7 +25,9 @@ async fn proxy_ca(state: &AppState, path: &str) -> AppResult<Json<serde_json::Va
     if !ALLOWED_CA_PATHS.contains(&path) {
         return Err(AppError::BadRequest(format!("CA path not permitted: {path}")));
     }
-    let url = format!("{}{}", state.config.step_ca_url, path);
+    let url = state.config.step_ca_url.join(path).map_err(|e| {
+        AppError::Internal(anyhow::anyhow!("Failed to construct CA URL: {e}"))
+    })?;
 
     let response = state
         .ca_client

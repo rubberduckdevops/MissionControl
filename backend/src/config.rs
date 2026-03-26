@@ -1,4 +1,5 @@
 use std::env;
+use url::Url;
 
 // Debug is intentionally NOT derived to prevent jwt_secret and invite_code
 // from appearing in logs or panic output.
@@ -8,7 +9,7 @@ pub struct AppConfig {
     pub frontend_origin: String,
     pub invite_code: String,
     pub weather_poll_interval_minutes: u64,
-    pub step_ca_url: String,
+    pub step_ca_url: Url,
     pub step_ca_root_cert: String,
     pub step_ca_intermediate_cert: String,
 }
@@ -24,8 +25,11 @@ impl AppConfig {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(60),
-            step_ca_url: env::var("STEP_CA_URL")
-                .unwrap_or_else(|_| "https://127.0.0.1:9000".to_string()),
+            step_ca_url: Url::parse(
+                &env::var("STEP_CA_URL")
+                    .unwrap_or_else(|_| "https://127.0.0.1:9000".to_string()),
+            )
+            .expect("STEP_CA_URL must be a valid URL"),
             step_ca_root_cert: env::var("STEP_CA_ROOT_CERT")
                 .unwrap_or_else(|_| "/etc/step-ca/certs/root_ca.crt".to_string()),
             step_ca_intermediate_cert: env::var("STEP_CA_INTERMEDIATE_CERT")
