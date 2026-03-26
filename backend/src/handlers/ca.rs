@@ -31,7 +31,7 @@ async fn proxy_ca(state: &AppState, path: &str) -> AppResult<Json<serde_json::Va
 
     let response = state
         .ca_client
-        .get(&url)
+        .get(url.clone())
         .send()
         .await
         .map_err(|e| {
