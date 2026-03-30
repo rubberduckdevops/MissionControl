@@ -26,6 +26,7 @@ export default function Layout({ children }: Props) {
     { type: 'link', text: 'Feeds', href: '/feeds' },
     { type: 'link', text: 'Weather', href: '/weather' },
     { type: 'link', text: 'CA', href: '/ca' },
+    { type: 'link', text: 'Countdown', href: '/countdown' },
   ]
 
   if (user?.role === 'admin') {
