@@ -9,6 +9,7 @@ import AdminPage from './pages/AdminPage'
 import FeedsPage from './pages/FeedsPage'
 import WeatherPage from './pages/WeatherPage'
 import CaDashboardPage from './pages/CaDashboardPage'
+import CountdownPage from './pages/CountdownPage'
 import PrivateRoute from './components/PrivateRoute'
 import AdminRoute from './components/AdminRoute'
 
@@ -79,6 +80,14 @@ export default function App() {
           element={
             <PrivateRoute>
               <CaDashboardPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/countdown"
+          element={
+            <PrivateRoute>
+              <CountdownPage />
             </PrivateRoute>
           }
         />
