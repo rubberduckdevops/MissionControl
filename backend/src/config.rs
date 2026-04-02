@@ -12,6 +12,8 @@ pub struct AppConfig {
     pub step_ca_url: Url,
     pub step_ca_root_cert: String,
     pub step_ca_intermediate_cert: String,
+    pub step_ca_provisioner_name: String,
+    pub step_ca_provisioner_key_pem: String,
 }
 
 impl AppConfig {
@@ -34,6 +36,10 @@ impl AppConfig {
                 .unwrap_or_else(|_| "/etc/step-ca/certs/root_ca.crt".to_string()),
             step_ca_intermediate_cert: env::var("STEP_CA_INTERMEDIATE_CERT")
                 .unwrap_or_else(|_| "/etc/step-ca/certs/intermediate_ca.crt".to_string()),
+            step_ca_provisioner_name: env::var("STEP_CA_PROVISIONER_NAME")
+                .expect("STEP_CA_PROVISIONER_NAME must be set"),
+            step_ca_provisioner_key_pem: env::var("STEP_CA_PROVISIONER_KEY_PEM")
+                .expect("STEP_CA_PROVISIONER_KEY_PEM must be set"),
         }
     }
 }

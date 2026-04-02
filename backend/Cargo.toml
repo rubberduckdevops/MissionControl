@@ -32,3 +32,4 @@ reqwest = { version = "0.13", features = ["native-tls", "json"], default-feature
 url = "2"
 x509-parser = "0.16"
 feed-rs = "2"
+rcgen = "0.13"

@@ -39,6 +39,7 @@ use crate::{
         admin::{admin_delete_user, admin_list_users, admin_update_role, admin_update_user},
         auth::{login, me, register, AppState},
         ca::{ca_cert_status, ca_crl, ca_health, ca_provisioners, ca_roots},
+        ca_sign::{list_issued_certs, sign_ssh_cert, sign_tls_cert},
         cti::{
             create_category, create_item, create_type, delete_category, delete_item, delete_type,
             list_categories, list_items, list_types,
@@ -62,6 +63,7 @@ pub fn build_router(
     nws_client: Arc<NwsClient>,
     ca_client: reqwest::Client,
     intermediate_cert_der: Arc<Vec<u8>>,
+    provisioner_key: Arc<jsonwebtoken::EncodingKey>,
 ) -> Router {
     let state = AppState {
         db: pool,
@@ -69,6 +71,7 @@ pub fn build_router(
         nws_client,
         ca_client,
         intermediate_cert_der,
+        provisioner_key,
     };
 
     // Rate limit: 10 req/min per IP (1 token/6s, burst of 10).
@@ -101,6 +104,9 @@ pub fn build_router(
             put(admin_update_user).delete(admin_delete_user),
         )
         .route("/api/admin/users/:id/role", put(admin_update_role))
+        .route("/api/ca/sign/tls", post(sign_tls_cert))
+        .route("/api/ca/sign/ssh", post(sign_ssh_cert))
+        .route("/api/ca/certificates", get(list_issued_certs))
         .layer(middleware::from_fn(require_admin));
 
     let protected_routes = Router::new()

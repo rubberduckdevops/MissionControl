@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod auth;
 pub mod ca;
+pub mod ca_sign;
 pub mod cti;
 pub mod dashboard;
 pub mod feeds;

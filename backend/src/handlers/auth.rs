@@ -64,6 +64,7 @@ pub struct AppState {
     pub nws_client: Arc<NwsClient>,
     pub ca_client: reqwest::Client,
     pub intermediate_cert_der: Arc<Vec<u8>>,
+    pub provisioner_key: Arc<EncodingKey>,
 }
 
 pub async fn register(

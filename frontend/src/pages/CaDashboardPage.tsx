@@ -10,16 +10,24 @@ import Alert from '@cloudscape-design/components/alert'
 import Badge from '@cloudscape-design/components/badge'
 import Spinner from '@cloudscape-design/components/spinner'
 import Table from '@cloudscape-design/components/table'
+import FormField from '@cloudscape-design/components/form-field'
+import Input from '@cloudscape-design/components/input'
+import Textarea from '@cloudscape-design/components/textarea'
 import Layout from '../components/Layout'
+import { useAuth } from '../contexts/AuthContext'
 import {
   getCaHealth,
   getCaCertStatus,
   getCaProvisioners,
   getCaCrl,
+  requestTlsCert,
+  requestSshCert,
+  listIssuedCerts,
   type CaHealthResponse,
   type CaCertStatusResponse,
   type CaProvisioner,
   type CaCrlResponse,
+  type IssuedCert,
 } from '../services/api'
 
 type SectionState<T> = { data: T | null; error: string | null; loading: boolean }
@@ -48,18 +56,61 @@ function formatDate(iso: string): string {
   }
 }
 
+function downloadPem(content: string, filename: string) {
+  const blob = new Blob([content], { type: 'text/plain' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
 export default function CaDashboardPage() {
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+
   const [health, setHealth] = useState<SectionState<CaHealthResponse>>(initSection())
   const [certStatus, setCertStatus] = useState<SectionState<CaCertStatusResponse>>(initSection())
   const [provisioners, setProvisioners] = useState<SectionState<CaProvisioner[]>>(initSection())
   const [crl, setCrl] = useState<SectionState<CaCrlResponse>>(initSection())
   const [refreshing, setRefreshing] = useState(false)
 
+  // TLS sign form
+  const [tlsCommonName, setTlsCommonName] = useState('')
+  const [tlsSans, setTlsSans] = useState('')
+  const [tlsSubmitting, setTlsSubmitting] = useState(false)
+  const [tlsError, setTlsError] = useState<string | null>(null)
+
+  // SSH sign form
+  const [sshPublicKey, setSshPublicKey] = useState('')
+  const [sshPrincipals, setSshPrincipals] = useState('')
+  const [sshSubmitting, setSshSubmitting] = useState(false)
+  const [sshError, setSshError] = useState<string | null>(null)
+  const [sshResult, setSshResult] = useState<string | null>(null)
+
+  // Issued certs
+  const [issuedCerts, setIssuedCerts] = useState<SectionState<IssuedCert[]>>(initSection())
+
+  const fetchIssuedCerts = useCallback(async () => {
+    if (!isAdmin) return
+    setIssuedCerts((s) => ({ ...s, loading: true, error: null }))
+    listIssuedCerts()
+      .then((r) => setIssuedCerts({ data: r.data, error: null, loading: false }))
+      .catch((e: unknown) =>
+        setIssuedCerts({
+          data: null,
+          error: `Failed to fetch issued certificates: ${e instanceof Error ? e.message : String(e)}`,
+          loading: false,
+        })
+      )
+  }, [isAdmin])
+
   const fetchAll = useCallback(async () => {
     setHealth((s) => ({ ...s, loading: true, error: null }))
     setCertStatus((s) => ({ ...s, loading: true, error: null }))
     setProvisioners((s) => ({ ...s, loading: true, error: null }))
     setCrl((s) => ({ ...s, loading: true, error: null }))
+    fetchIssuedCerts()
 
     await Promise.allSettled([
       getCaHealth()
@@ -94,6 +145,39 @@ export default function CaDashboardPage() {
     setRefreshing(true)
     await fetchAll()
     setRefreshing(false)
+  }
+
+  const handleTlsSign = async () => {
+    setTlsError(null)
+    setTlsSubmitting(true)
+    const sans = tlsSans.split(',').map((s) => s.trim()).filter(Boolean)
+    try {
+      const res = await requestTlsCert({ commonName: tlsCommonName, sans })
+      downloadPem(res.data.cert_pem, `${tlsCommonName}.crt`)
+      downloadPem(res.data.key_pem, `${tlsCommonName}.key`)
+      setTlsCommonName('')
+      setTlsSans('')
+      fetchIssuedCerts()
+    } catch (e: unknown) {
+      setTlsError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setTlsSubmitting(false)
+    }
+  }
+
+  const handleSshSign = async () => {
+    setSshError(null)
+    setSshResult(null)
+    setSshSubmitting(true)
+    const principals = sshPrincipals.split(',').map((s) => s.trim()).filter(Boolean)
+    try {
+      const res = await requestSshCert({ publicKey: sshPublicKey, principals })
+      setSshResult(res.data.signed_cert)
+    } catch (e: unknown) {
+      setSshError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setSshSubmitting(false)
+    }
   }
 
   const caOffline =
@@ -220,6 +304,115 @@ export default function CaDashboardPage() {
               />
             )}
           </Container>
+
+          {isAdmin && (
+            <>
+              {/* Request TLS Certificate */}
+              <Container header={<Header variant="h2">Request TLS Certificate</Header>}>
+                <SpaceBetween size="m">
+                  {tlsError && <Alert type="error">{tlsError}</Alert>}
+                  <FormField label="Common Name" description="Primary domain for the certificate (e.g. example.com)">
+                    <Input
+                      value={tlsCommonName}
+                      onChange={(e) => setTlsCommonName(e.detail.value)}
+                      placeholder="example.com"
+                      disabled={tlsSubmitting}
+                    />
+                  </FormField>
+                  <FormField
+                    label="Additional SANs"
+                    description="Comma-separated additional DNS names (optional)"
+                  >
+                    <Input
+                      value={tlsSans}
+                      onChange={(e) => setTlsSans(e.detail.value)}
+                      placeholder="www.example.com, api.example.com"
+                      disabled={tlsSubmitting}
+                    />
+                  </FormField>
+                  <Button
+                    variant="primary"
+                    loading={tlsSubmitting}
+                    onClick={handleTlsSign}
+                    disabled={!tlsCommonName.trim()}
+                  >
+                    Request &amp; Download
+                  </Button>
+                </SpaceBetween>
+              </Container>
+
+              {/* Sign SSH Key */}
+              <Container header={<Header variant="h2">Sign SSH Public Key</Header>}>
+                <SpaceBetween size="m">
+                  {sshError && <Alert type="error">{sshError}</Alert>}
+                  <FormField label="SSH Public Key">
+                    <Textarea
+                      value={sshPublicKey}
+                      onChange={(e) => setSshPublicKey(e.detail.value)}
+                      placeholder="ssh-ed25519 AAAA..."
+                      rows={3}
+                      disabled={sshSubmitting}
+                    />
+                  </FormField>
+                  <FormField
+                    label="Principals"
+                    description="Comma-separated usernames allowed by this certificate (e.g. ec2-user, ubuntu)"
+                  >
+                    <Input
+                      value={sshPrincipals}
+                      onChange={(e) => setSshPrincipals(e.detail.value)}
+                      placeholder="ec2-user, ubuntu"
+                      disabled={sshSubmitting}
+                    />
+                  </FormField>
+                  <Button
+                    variant="primary"
+                    loading={sshSubmitting}
+                    onClick={handleSshSign}
+                    disabled={!sshPublicKey.trim() || !sshPrincipals.trim()}
+                  >
+                    Sign Key
+                  </Button>
+                  {sshResult && (
+                    <FormField label="Signed Certificate">
+                      <SpaceBetween size="xs">
+                        <Textarea value={sshResult} readOnly rows={4} />
+                        <Button
+                          onClick={() => {
+                            downloadPem(sshResult, 'id_signed-cert.pub')
+                          }}
+                        >
+                          Download
+                        </Button>
+                      </SpaceBetween>
+                    </FormField>
+                  )}
+                </SpaceBetween>
+              </Container>
+
+              {/* Issued TLS Certificates */}
+              <Container header={<Header variant="h2">Issued TLS Certificates</Header>}>
+                {issuedCerts.loading ? (
+                  <Spinner />
+                ) : issuedCerts.error ? (
+                  <Alert type="error">{issuedCerts.error}</Alert>
+                ) : (
+                  <Table
+                    items={issuedCerts.data ?? []}
+                    columnDefinitions={[
+                      { id: 'cn', header: 'Common Name', cell: (c) => c.common_name },
+                      { id: 'sans', header: 'SANs', cell: (c) => c.sans.join(', ') || '—' },
+                      { id: 'serial', header: 'Serial', cell: (c) => c.serial },
+                      { id: 'expires', header: 'Expires', cell: (c) => formatDate(c.expires_at) },
+                      { id: 'requested_by', header: 'Requested By', cell: (c) => c.requested_by_email },
+                      { id: 'issued_at', header: 'Issued At', cell: (c) => formatDate(c.issued_at) },
+                    ]}
+                    empty={<Box color="text-body-secondary">No certificates issued yet.</Box>}
+                  />
+                )}
+              </Container>
+            </>
+          )}
         </SpaceBetween>
       </ContentLayout>
     </Layout>

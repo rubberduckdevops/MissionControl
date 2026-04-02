@@ -1,5 +1,6 @@
 use anyhow::Result;
 use dotenvy::dotenv;
+use jsonwebtoken::EncodingKey;
 use mongodb::{Client, IndexModel, options::IndexOptions};
 use bson::doc;
 use std::{env, net::SocketAddr, sync::Arc, time::Duration};
@@ -84,6 +85,15 @@ async fn main() -> Result<()> {
             None,
         )
         .await?;
+    // Index issued certs by requester and expiry
+    db.collection::<bson::Document>("issued_certificates")
+        .create_index(
+            IndexModel::builder()
+                .keys(doc! { "requested_by": 1, "issued_at": -1 })
+                .build(),
+            None,
+        )
+        .await?;
     tracing::info!("MongoDB indexes ensured");
 
     let nws = Arc::new(nws_client::NwsClient::new());
@@ -132,7 +142,12 @@ async fn main() -> Result<()> {
         }
     };
 
-    let app = routes::build_router(db, nws, ca_client, intermediate_cert_der);
+    let provisioner_key = Arc::new(
+        EncodingKey::from_ec_pem(app_config.step_ca_provisioner_key_pem.as_bytes())
+            .expect("STEP_CA_PROVISIONER_KEY_PEM must be a valid EC private key in PKCS8 PEM format"),
+    );
+
+    let app = routes::build_router(db, nws, ca_client, intermediate_cert_der, provisioner_key);
 
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{port}");
