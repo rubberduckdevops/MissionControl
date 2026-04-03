@@ -6,7 +6,7 @@ interface Props {
 }
 
 export default function AdminRoute({ children }: Props) {
-  const { user, loading } = useAuth()
+  const { user, loading, login } = useAuth()
 
   if (loading) {
     return (
@@ -17,7 +17,8 @@ export default function AdminRoute({ children }: Props) {
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />
+    login()
+    return null
   }
 
   if (user.role !== 'admin') {

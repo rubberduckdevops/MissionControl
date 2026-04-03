@@ -1,13 +1,14 @@
 use std::env;
 use url::Url;
 
-// Debug is intentionally NOT derived to prevent jwt_secret and invite_code
+// Debug is intentionally NOT derived to prevent sensitive values
 // from appearing in logs or panic output.
 #[derive(Clone)]
 pub struct AppConfig {
-    pub jwt_secret: String,
     pub frontend_origin: String,
-    pub invite_code: String,
+    pub keycloak_url: String,
+    pub keycloak_realm: String,
+    pub keycloak_client_id: String,
     pub weather_poll_interval_minutes: u64,
     pub step_ca_url: Url,
     pub step_ca_root_cert: String,
@@ -17,10 +18,12 @@ pub struct AppConfig {
 impl AppConfig {
     pub fn from_env() -> Self {
         Self {
-            jwt_secret: env::var("JWT_SECRET").expect("JWT_SECRET must be set"),
             frontend_origin: env::var("FRONTEND_ORIGIN")
                 .unwrap_or_else(|_| "http://localhost:3000".to_string()),
-            invite_code: env::var("INVITE_CODE").expect("INVITE_CODE must be set"),
+            keycloak_url: env::var("KEYCLOAK_URL").expect("KEYCLOAK_URL must be set"),
+            keycloak_realm: env::var("KEYCLOAK_REALM").expect("KEYCLOAK_REALM must be set"),
+            keycloak_client_id: env::var("KEYCLOAK_CLIENT_ID")
+                .expect("KEYCLOAK_CLIENT_ID must be set"),
             weather_poll_interval_minutes: env::var("WEATHER_POLL_INTERVAL_MINUTES")
                 .ok()
                 .and_then(|v| v.parse().ok())
