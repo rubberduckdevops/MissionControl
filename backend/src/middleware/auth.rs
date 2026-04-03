@@ -16,12 +16,21 @@ pub async fn require_auth(
     mut req: Request,
     next: Next,
 ) -> Result<Response, AppError> {
-    let auth_header = req
+    let auth_header = match req
         .headers()
         .get("Authorization")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
-        .ok_or(AppError::Unauthorized)?;
+    {
+        Some(header) => {
+            tracing::debug!("Authorization header found, token length: {}", header.len());
+            header
+        }
+        None => {
+            tracing::warn!("No Authorization header or Bearer token found");
+            return Err(AppError::Unauthorized);
+        }
+    };
 
     let validation = build_validation(&state.config);
 
@@ -31,21 +40,32 @@ pub async fn require_auth(
     };
 
     let token_data = match decode_result {
-        Ok(data) => data,
+        Ok(data) => {
+            tracing::debug!("JWT validation successful");
+            data
+        }
         Err(e) if matches!(e.kind(), ErrorKind::InvalidSignature) => {
-            // Signature mismatch may mean Keycloak rotated its signing key — refresh and retry once
-            tracing::warn!("JWT signature invalid; refreshing Keycloak JWKS and retrying");
+            tracing::warn!("JWT signature invalid; refreshing Keycloak JWKS and retrying: {}", e);
             let new_key = fetch_decoding_key(&state.config)
                 .await
-                .map_err(|_| AppError::Unauthorized)?;
+                .map_err(|e| {
+                    tracing::error!("Failed to refresh Keycloak JWKS: {}", e);
+                    AppError::Unauthorized
+                })?;
             let mut write = state.keycloak_decoding_key.write().await;
             *write = new_key;
             drop(write);
             let key = state.keycloak_decoding_key.read().await;
             decode::<KeycloakClaims>(auth_header, &*key, &validation)
-                .map_err(|_| AppError::Unauthorized)?
+                .map_err(|e| {
+                    tracing::error!("JWT validation failed after key refresh: {}", e);
+                    AppError::Unauthorized
+                })?
         }
-        Err(_) => return Err(AppError::Unauthorized),
+        Err(e) => {
+            tracing::warn!("JWT validation failed: {}", e);
+            return Err(AppError::Unauthorized);
+        }
     };
 
     let kc = token_data.claims;
