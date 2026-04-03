@@ -26,13 +26,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = oidcAuth.user?.access_token ?? null
+    console.log('OIDC state:', { isAuthenticated: oidcAuth.isAuthenticated, isLoading: oidcAuth.isLoading, hasToken: !!token, hasUser: !!oidcAuth.user })
     setAccessToken(token)
 
     if (oidcAuth.isAuthenticated && token) {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]))
         console.log('Access token payload:', payload)
-      } catch { /* ignore */ }
+      } catch (e) { console.error('Token decode error:', e) }
       setFetchFailed(false)
       api
         .get('/api/auth/me')
@@ -44,10 +45,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('✗ /api/auth/me failed:', err.response?.status, err.response?.data, err.message)
           setUser(null)
           setFetchFailed(true)
-          // Add a long delay to capture logs
-          setTimeout(() => {
-            window.location.reload()
-          }, 10000)
         })
     } else if (!oidcAuth.isLoading) {
       setUser(null)
