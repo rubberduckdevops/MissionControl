@@ -33,6 +33,7 @@ pub async fn require_auth(
     };
 
     let validation = build_validation(&state.config);
+    tracing::debug!("JWT validation config - audience: {:?}, issuer: {:?}", &state.config.keycloak_client_id, format!("{}/realms/{}", &state.config.keycloak_url, &state.config.keycloak_realm));
 
     let decode_result = {
         let key = state.keycloak_decoding_key.read().await;
@@ -63,7 +64,7 @@ pub async fn require_auth(
                 })?
         }
         Err(e) => {
-            tracing::warn!("JWT validation failed: {}", e);
+            tracing::warn!("JWT validation failed: {} (expected audience: {})", e, &state.config.keycloak_client_id);
             return Err(AppError::Unauthorized);
         }
     };

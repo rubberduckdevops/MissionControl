@@ -32,8 +32,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setFetchFailed(false)
       api
         .get('/api/auth/me')
-        .then((res) => setUser(res.data))
-        .catch(() => {
+        .then((res) => {
+          console.log('✓ /api/auth/me succeeded:', res.data)
+          setUser(res.data)
+        })
+        .catch((err) => {
+          console.error('✗ /api/auth/me failed:', err.response?.status, err.response?.data, err.message)
           setUser(null)
           setFetchFailed(true)
         })
