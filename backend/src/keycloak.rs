@@ -32,6 +32,7 @@ pub fn build_validation(config: &AppConfig) -> Validation {
     validation.set_audience(&[&config.keycloak_client_id]);
     let issuer = format!("{}/realms/{}", config.keycloak_url, config.keycloak_realm);
     validation.set_issuer(&[issuer]);
+    validation.set_required_spec_claims(&["exp"]);
     validation
 }
 
