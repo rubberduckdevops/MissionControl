@@ -40,10 +40,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           console.error('✗ /api/auth/me failed:', err.response?.status, err.response?.data, err.message)
           setUser(null)
           setFetchFailed(true)
-          // Add a delay before retry to capture logs
+          // Add a long delay to capture logs
           setTimeout(() => {
             window.location.reload()
-          }, 2000)
+          }, 10000)
         })
     } else if (!oidcAuth.isLoading) {
       setUser(null)
