@@ -11,10 +11,11 @@ pub struct RealmAccess {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct KeycloakClaims {
-    pub sub: String,
-    pub email: String,
-    pub preferred_username: String,
-    pub realm_access: RealmAccess,
+    pub sub: Option<String>,
+    pub email: Option<String>,
+    pub preferred_username: Option<String>,
+    #[serde(default)]
+    pub realm_access: Option<RealmAccess>,
     pub exp: usize,
 }
 

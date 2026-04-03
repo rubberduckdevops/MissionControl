@@ -69,11 +69,29 @@ pub async fn require_auth(
     };
 
     let kc = token_data.claims;
+    
+    let sub = kc.sub.ok_or_else(|| {
+        tracing::error!("Token missing 'sub' claim");
+        AppError::Unauthorized
+    })?;
+    let email = kc.email.ok_or_else(|| {
+        tracing::error!("Token missing 'email' claim");
+        AppError::Unauthorized
+    })?;
+    let username = kc.preferred_username.ok_or_else(|| {
+        tracing::error!("Token missing 'preferred_username' claim");
+        AppError::Unauthorized
+    })?;
+    let realm_access = kc.realm_access.ok_or_else(|| {
+        tracing::error!("Token missing 'realm_access' claim");
+        AppError::Unauthorized
+    })?;
+    
     let claims = Claims {
-        sub: kc.sub,
-        email: kc.email,
-        username: kc.preferred_username,
-        role: map_role(&kc.realm_access.roles),
+        sub,
+        email,
+        username,
+        role: map_role(&realm_access.roles),
         exp: kc.exp,
     };
 
