@@ -1,4 +1,3 @@
-import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 interface Props {
@@ -6,7 +5,7 @@ interface Props {
 }
 
 export default function PrivateRoute({ children }: Props) {
-  const { user, loading } = useAuth()
+  const { user, loading, login } = useAuth()
 
   if (loading) {
     return (
@@ -16,5 +15,10 @@ export default function PrivateRoute({ children }: Props) {
     )
   }
 
-  return user ? <>{children}</> : <Navigate to="/login" replace />
+  if (!user) {
+    login()
+    return null
+  }
+
+  return <>{children}</>
 }

@@ -3,11 +3,12 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use jsonwebtoken::decode;
 
 use crate::{
     errors::AppError,
     handlers::auth::{AppState, Claims},
+    keycloak::{build_validation, map_role, KeycloakClaims},
 };
 
 pub async fn require_auth(
@@ -22,13 +23,23 @@ pub async fn require_auth(
         .and_then(|v| v.strip_prefix("Bearer "))
         .ok_or(AppError::Unauthorized)?;
 
-    let token_data = decode::<Claims>(
+    let validation = build_validation(&state.config);
+    let token_data = decode::<KeycloakClaims>(
         auth_header,
-        &DecodingKey::from_secret(state.config.jwt_secret.as_bytes()),
-        &Validation::default(),
+        &state.keycloak_decoding_key,
+        &validation,
     )
     .map_err(|_| AppError::Unauthorized)?;
 
-    req.extensions_mut().insert(token_data.claims);
+    let kc = token_data.claims;
+    let claims = Claims {
+        sub: kc.sub,
+        email: kc.email,
+        username: kc.preferred_username,
+        role: map_role(&kc.realm_access.roles),
+        exp: kc.exp,
+    };
+
+    req.extensions_mut().insert(claims);
     Ok(next.run(req).await)
 }

@@ -1,13 +1,11 @@
-use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
-    Argon2,
-};
-use constant_time_eq::constant_time_eq;
 use axum::{extract::State, Json};
-use bson::doc;
-use chrono::{Duration, Utc};
-use jsonwebtoken::{encode, EncodingKey, Header};
-use mongodb::Database;
+use bson::{doc, to_bson};
+use chrono::Utc;
+use jsonwebtoken::DecodingKey;
+use mongodb::{
+    options::{FindOneAndUpdateOptions, ReturnDocument},
+    Database,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
@@ -18,43 +16,13 @@ use crate::{
     nws_client::NwsClient,
 };
 
-#[derive(Deserialize)]
-pub struct RegisterRequest {
-    pub email: String,
-    pub username: String,
-    pub password: String,
-    pub invite_code: String,
-}
-
-impl std::fmt::Debug for RegisterRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RegisterRequest")
-            .field("email", &self.email)
-            .field("username", &self.username)
-            .field("password", &"[REDACTED]")
-            .field("invite_code", &"[REDACTED]")
-            .finish()
-    }
-}
-
-#[derive(Debug, Deserialize)]
-pub struct LoginRequest {
-    pub email: String,
-    pub password: String,
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Claims {
-    pub sub: String, // user id (UUID string)
+    pub sub: String,
     pub email: String,
+    pub username: String,
     pub role: String,
     pub exp: usize,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AuthResponse {
-    pub token: String,
-    pub user: UserPublic,
 }
 
 #[derive(Clone)]
@@ -64,95 +32,34 @@ pub struct AppState {
     pub nws_client: Arc<NwsClient>,
     pub ca_client: reqwest::Client,
     pub intermediate_cert_der: Arc<Vec<u8>>,
-}
-
-pub async fn register(
-    State(state): State<AppState>,
-    Json(payload): Json<RegisterRequest>,
-) -> AppResult<Json<AuthResponse>> {
-    if !constant_time_eq(payload.invite_code.as_bytes(), state.config.invite_code.as_bytes()) {
-        return Err(AppError::Forbidden);
-    }
-
-    let argon2 = Argon2::default();
-    let salt = SaltString::generate(&mut OsRng);
-    let password_hash = argon2
-        .hash_password(payload.password.as_bytes(), &salt)
-        .map_err(|e| AppError::BadRequest(format!("Password hashing failed: {e}")))?
-        .to_string();
-
-    let user = User::new(payload.email, payload.username, password_hash);
-    let collection = state.db.collection::<User>("users");
-
-    collection.insert_one(&user, None).await.map_err(|e| {
-        if is_duplicate_key(&e) {
-            AppError::Conflict("Email or username already taken".into())
-        } else {
-            AppError::Database(e)
-        }
-    })?;
-
-    let token = mint_token(&user, &state.config.jwt_secret)?;
-    Ok(Json(AuthResponse {
-        token,
-        user: user.into(),
-    }))
-}
-
-pub async fn login(
-    State(state): State<AppState>,
-    Json(payload): Json<LoginRequest>,
-) -> AppResult<Json<AuthResponse>> {
-    let collection = state.db.collection::<User>("users");
-    let user = collection
-        .find_one(doc! { "email": &payload.email }, None)
-        .await?
-        .ok_or(AppError::Unauthorized)?;
-
-    let parsed_hash = PasswordHash::new(&user.password_hash).map_err(|_| AppError::Unauthorized)?;
-    Argon2::default()
-        .verify_password(payload.password.as_bytes(), &parsed_hash)
-        .map_err(|_| AppError::Unauthorized)?;
-
-    let token = mint_token(&user, &state.config.jwt_secret)?;
-    Ok(Json(AuthResponse {
-        token,
-        user: user.into(),
-    }))
+    pub keycloak_decoding_key: Arc<DecodingKey>,
 }
 
 pub async fn me(
     axum::Extension(claims): axum::Extension<Claims>,
     State(state): State<AppState>,
 ) -> AppResult<Json<UserPublic>> {
+    let now = Utc::now();
     let collection = state.db.collection::<User>("users");
-    let user = collection
-        .find_one(doc! { "_id": &claims.sub }, None)
-        .await?
-        .ok_or(AppError::NotFound)?;
-    Ok(Json(user.into()))
-}
-
-fn mint_token(user: &User, secret: &str) -> AppResult<String> {
-    let exp = (Utc::now() + Duration::hours(24)).timestamp() as usize;
-    let claims = Claims {
-        sub: user.id.clone(),
-        email: user.email.clone(),
-        role: user.role.clone(),
-        exp,
+    let filter = doc! { "_id": &claims.sub };
+    let update = doc! {
+        "$set": {
+            "email": &claims.email,
+            "username": &claims.username,
+            "role": &claims.role,
+            "updated_at": to_bson(&now).unwrap(),
+        },
+        "$setOnInsert": {
+            "created_at": to_bson(&now).unwrap(),
+        }
     };
-    encode(
-        &Header::default(),
-        &claims,
-        &EncodingKey::from_secret(secret.as_bytes()),
-    )
-    .map_err(|e| AppError::Internal(anyhow::anyhow!("JWT encode error: {e}")))
-}
-
-fn is_duplicate_key(e: &mongodb::error::Error) -> bool {
-    matches!(
-        e.kind.as_ref(),
-        mongodb::error::ErrorKind::Write(mongodb::error::WriteFailure::WriteError(we))
-            if we.code == 11000
-    )
+    let options = FindOneAndUpdateOptions::builder()
+        .upsert(true)
+        .return_document(ReturnDocument::After)
+        .build();
+    let user = collection
+        .find_one_and_update(filter, update, options)
+        .await?
+        .ok_or_else(|| AppError::Internal(anyhow::anyhow!("Upsert returned no document")))?;
+    Ok(Json(user.into()))
 }

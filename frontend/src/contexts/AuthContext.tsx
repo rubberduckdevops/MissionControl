@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import api from '../services/api'
+import { useAuth as useOidcAuth } from 'react-oidc-context'
+import api, { setAccessToken } from '../services/api'
 
 interface User {
   id: string
@@ -9,64 +10,38 @@ interface User {
   created_at: string
 }
 
-interface AuthState {
+interface AuthContextType {
   user: User | null
-  token: string | null
   loading: boolean
-}
-
-interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<void>
-  register: (email: string, username: string, password: string, inviteCode: string) => Promise<void>
+  login: () => void
   logout: () => void
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<AuthState>({
-    user: null,
-    token: localStorage.getItem('token'),
-    loading: true,
-  })
+  const oidcAuth = useOidcAuth()
+  const [user, setUser] = useState<User | null>(null)
 
-  // Hydrate user from stored token on mount
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
+    const token = oidcAuth.user?.access_token ?? null
+    setAccessToken(token)
+
+    if (oidcAuth.isAuthenticated && token) {
       api
         .get('/api/auth/me')
-        .then((res) => setState({ user: res.data, token, loading: false }))
-        .catch(() => {
-          localStorage.removeItem('token')
-          setState({ user: null, token: null, loading: false })
-        })
-    } else {
-      setState((s) => ({ ...s, loading: false }))
+        .then((res) => setUser(res.data))
+        .catch(() => setUser(null))
+    } else if (!oidcAuth.isLoading) {
+      setUser(null)
     }
-  }, [])
+  }, [oidcAuth.isAuthenticated, oidcAuth.user?.access_token, oidcAuth.isLoading])
 
-  const login = async (email: string, password: string) => {
-    const res = await api.post('/api/auth/login', { email, password })
-    const { token, user } = res.data
-    localStorage.setItem('token', token)
-    setState({ user, token, loading: false })
-  }
-
-  const register = async (email: string, username: string, password: string, inviteCode: string) => {
-    const res = await api.post('/api/auth/register', { email, username, password, invite_code: inviteCode })
-    const { token, user } = res.data
-    localStorage.setItem('token', token)
-    setState({ user, token, loading: false })
-  }
-
-  const logout = () => {
-    localStorage.removeItem('token')
-    setState({ user: null, token: null, loading: false })
-  }
+  const login = () => oidcAuth.signinRedirect()
+  const logout = () => oidcAuth.signoutRedirect()
 
   return (
-    <AuthContext.Provider value={{ ...state, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading: oidcAuth.isLoading || (oidcAuth.isAuthenticated && user === null), login, logout }}>
       {children}
     </AuthContext.Provider>
   )

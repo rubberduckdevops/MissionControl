@@ -10,6 +10,7 @@ mod config;
 mod db;
 mod errors;
 mod handlers;
+mod keycloak;
 mod middleware;
 mod models;
 mod nws_client;
@@ -86,15 +87,22 @@ async fn main() -> Result<()> {
         .await?;
     tracing::info!("MongoDB indexes ensured");
 
+    let app_config = config::AppConfig::from_env();
+
+    let keycloak_decoding_key = Arc::new(
+        keycloak::fetch_decoding_key(&app_config)
+            .await
+            .expect("Failed to fetch Keycloak JWKS — is KEYCLOAK_URL/REALM correct?"),
+    );
+    tracing::info!("Keycloak JWKS loaded");
+
     let nws = Arc::new(nws_client::NwsClient::new());
-    let poll_interval = config::AppConfig::from_env().weather_poll_interval_minutes;
+    let poll_interval = app_config.weather_poll_interval_minutes;
     let poller_db = db.clone();
     let poller_nws = Arc::clone(&nws);
     tokio::spawn(async move {
         weather_poller::run_weather_poller(poller_db, poller_nws, poll_interval).await;
     });
-
-    let app_config = config::AppConfig::from_env();
 
     let root_cert_pem = tokio::fs::read(&app_config.step_ca_root_cert)
         .await
@@ -132,7 +140,7 @@ async fn main() -> Result<()> {
         }
     };
 
-    let app = routes::build_router(db, nws, ca_client, intermediate_cert_der);
+    let app = routes::build_router(db, nws, ca_client, intermediate_cert_der, keycloak_decoding_key);
 
     let port = env::var("PORT").unwrap_or_else(|_| "8080".to_string());
     let addr = format!("0.0.0.0:{port}");

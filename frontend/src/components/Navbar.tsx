@@ -1,15 +1,13 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Navbar() {
   const { user, logout } = useAuth()
-  const navigate = useNavigate()
   const [hoveredLink, setHoveredLink] = useState<string | null>(null)
 
   const handleLogout = () => {
     logout()
-    navigate('/login')
   }
 
   const linkStyle = (name: string) => ({

@@ -7,11 +7,7 @@ use axum::{
     Router,
 };
 use axum::http::header::HeaderName;
-use tower_governor::{
-    governor::GovernorConfigBuilder,
-    key_extractor::SmartIpKeyExtractor,
-    GovernorLayer,
-};
+use jsonwebtoken::DecodingKey;
 use tower_http::{
     cors::CorsLayer,
     request_id::{MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer},
@@ -37,7 +33,7 @@ use crate::{
     db::Db,
     handlers::{
         admin::{admin_delete_user, admin_list_users, admin_update_role, admin_update_user},
-        auth::{login, me, register, AppState},
+        auth::{me, AppState},
         ca::{ca_cert_status, ca_crl, ca_health, ca_provisioners, ca_roots},
         cti::{
             create_category, create_item, create_type, delete_category, delete_item, delete_type,
@@ -62,6 +58,7 @@ pub fn build_router(
     nws_client: Arc<NwsClient>,
     ca_client: reqwest::Client,
     intermediate_cert_der: Arc<Vec<u8>>,
+    keycloak_decoding_key: Arc<DecodingKey>,
 ) -> Router {
     let state = AppState {
         db: pool,
@@ -69,30 +66,13 @@ pub fn build_router(
         nws_client,
         ca_client,
         intermediate_cert_der,
+        keycloak_decoding_key,
     };
-
-    // Rate limit: 10 req/min per IP (1 token/6s, burst of 10).
-    // SmartIpKeyExtractor prefers X-Forwarded-For when present (reverse proxy deployments)
-    // and falls back to the TCP peer address for direct connections.
-    let governor_conf = Arc::new(
-        GovernorConfigBuilder::default()
-            .per_second(6)
-            .burst_size(10)
-            .key_extractor(SmartIpKeyExtractor)
-            .finish()
-            .unwrap(),
-    );
 
     let x_correlation_id = HeaderName::from_static("x-correlation-id");
 
     let health_route = Router::new()
         .route("/health", get(health_check));
-
-    // Rate-limited to 10 req/min per IP
-    let auth_routes = Router::new()
-        .route("/api/auth/register", post(register))
-        .route("/api/auth/login", post(login))
-        .layer(GovernorLayer { config: governor_conf });
 
     let admin_routes = Router::new()
         .route("/api/admin/users", get(admin_list_users))
@@ -135,7 +115,6 @@ pub fn build_router(
 
     Router::new()
         .merge(health_route)
-        .merge(auth_routes)
         .merge(protected_routes)
         .layer(PropagateRequestIdLayer::new(x_correlation_id.clone()))
         .layer(SetRequestIdLayer::new(x_correlation_id, AlwaysMakeRequestUuid))
