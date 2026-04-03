@@ -34,6 +34,7 @@ pub async fn require_auth(
         Ok(data) => data,
         Err(e) if matches!(e.kind(), ErrorKind::InvalidSignature) => {
             // Signature mismatch may mean Keycloak rotated its signing key — refresh and retry once
+            tracing::warn!("JWT signature invalid; refreshing Keycloak JWKS and retrying");
             let new_key = fetch_decoding_key(&state.config)
                 .await
                 .map_err(|_| AppError::Unauthorized)?;
