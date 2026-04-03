@@ -16,12 +16,8 @@ export default function PrivateRoute({ children }: Props) {
   }
 
   if (!user) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginTop: '4rem', gap: '1rem' }}>
-        <p>Not authenticated</p>
-        <button onClick={login}>Login</button>
-      </div>
-    )
+    login()
+    return null
   }
 
   return <>{children}</>

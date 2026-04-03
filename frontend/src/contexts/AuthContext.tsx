@@ -26,23 +26,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const token = oidcAuth.user?.access_token ?? null
-    console.log('OIDC state:', { isAuthenticated: oidcAuth.isAuthenticated, isLoading: oidcAuth.isLoading, hasToken: !!token, hasUser: !!oidcAuth.user })
     setAccessToken(token)
 
     if (oidcAuth.isAuthenticated && token) {
-      try {
-        const payload = JSON.parse(atob(token.split('.')[1]))
-        console.log('Access token payload:', payload)
-      } catch (e) { console.error('Token decode error:', e) }
       setFetchFailed(false)
       api
         .get('/api/auth/me')
-        .then((res) => {
-          console.log('✓ /api/auth/me succeeded:', res.data)
-          setUser(res.data)
-        })
-        .catch((err) => {
-          console.error('✗ /api/auth/me failed:', err.response?.status, err.response?.data, err.message)
+        .then((res) => setUser(res.data))
+        .catch(() => {
           setUser(null)
           setFetchFailed(true)
         })

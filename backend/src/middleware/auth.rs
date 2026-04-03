@@ -69,16 +69,7 @@ pub async fn require_auth(
         }
     };
 
-    // Temporary debug: decode as raw Value to see all claims
-    if let Ok(raw_td) = {
-        let key = state.keycloak_decoding_key.read().await;
-        decode::<serde_json::Value>(auth_header, &*key, &build_validation(&state.config))
-    } {
-        tracing::debug!("Raw JWT claims: {}", raw_td.claims);
-    }
-
     let kc = token_data.claims;
-    tracing::debug!("Decoded token claims: sub={:?}, email={:?}, preferred_username={:?}, realm_access={:?}", kc.sub, kc.email, kc.preferred_username, kc.realm_access.as_ref().map(|r| &r.roles));
 
     let sub = kc.sub.ok_or_else(|| {
         tracing::error!("Token missing 'sub' claim");
