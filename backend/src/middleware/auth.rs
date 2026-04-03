@@ -70,7 +70,8 @@ pub async fn require_auth(
     };
 
     let kc = token_data.claims;
-    
+    tracing::debug!("Decoded token claims: sub={:?}, email={:?}, preferred_username={:?}, realm_access={:?}", kc.sub, kc.email, kc.preferred_username, kc.realm_access.as_ref().map(|r| &r.roles));
+
     let sub = kc.sub.ok_or_else(|| {
         tracing::error!("Token missing 'sub' claim");
         AppError::Unauthorized
