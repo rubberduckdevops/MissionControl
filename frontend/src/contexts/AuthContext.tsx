@@ -29,6 +29,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessToken(token)
 
     if (oidcAuth.isAuthenticated && token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        console.log('Access token payload:', payload)
+      } catch { /* ignore */ }
       setFetchFailed(false)
       api
         .get('/api/auth/me')
