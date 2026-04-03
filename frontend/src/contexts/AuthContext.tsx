@@ -22,18 +22,24 @@ const AuthContext = createContext<AuthContextType | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const oidcAuth = useOidcAuth()
   const [user, setUser] = useState<User | null>(null)
+  const [fetchFailed, setFetchFailed] = useState(false)
 
   useEffect(() => {
     const token = oidcAuth.user?.access_token ?? null
     setAccessToken(token)
 
     if (oidcAuth.isAuthenticated && token) {
+      setFetchFailed(false)
       api
         .get('/api/auth/me')
         .then((res) => setUser(res.data))
-        .catch(() => setUser(null))
+        .catch(() => {
+          setUser(null)
+          setFetchFailed(true)
+        })
     } else if (!oidcAuth.isLoading) {
       setUser(null)
+      setFetchFailed(false)
     }
   }, [oidcAuth.isAuthenticated, oidcAuth.user?.access_token, oidcAuth.isLoading])
 
@@ -41,7 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => oidcAuth.signoutRedirect()
 
   return (
-    <AuthContext.Provider value={{ user, loading: oidcAuth.isLoading || (oidcAuth.isAuthenticated && user === null), login, logout }}>
+    <AuthContext.Provider value={{ user, loading: oidcAuth.isLoading || (oidcAuth.isAuthenticated && user === null && !fetchFailed), login, logout }}>
       {children}
     </AuthContext.Provider>
   )

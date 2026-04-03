@@ -3,12 +3,12 @@ use axum::{
     middleware::Next,
     response::Response,
 };
-use jsonwebtoken::decode;
+use jsonwebtoken::{decode, errors::ErrorKind};
 
 use crate::{
     errors::AppError,
     handlers::auth::{AppState, Claims},
-    keycloak::{build_validation, map_role, KeycloakClaims},
+    keycloak::{build_validation, fetch_decoding_key, map_role, KeycloakClaims},
 };
 
 pub async fn require_auth(
@@ -24,12 +24,28 @@ pub async fn require_auth(
         .ok_or(AppError::Unauthorized)?;
 
     let validation = build_validation(&state.config);
-    let token_data = decode::<KeycloakClaims>(
-        auth_header,
-        &state.keycloak_decoding_key,
-        &validation,
-    )
-    .map_err(|_| AppError::Unauthorized)?;
+
+    let decode_result = {
+        let key = state.keycloak_decoding_key.read().await;
+        decode::<KeycloakClaims>(auth_header, &*key, &validation)
+    };
+
+    let token_data = match decode_result {
+        Ok(data) => data,
+        Err(e) if matches!(e.kind(), ErrorKind::InvalidSignature) => {
+            // Signature mismatch may mean Keycloak rotated its signing key — refresh and retry once
+            let new_key = fetch_decoding_key(&state.config)
+                .await
+                .map_err(|_| AppError::Unauthorized)?;
+            let mut write = state.keycloak_decoding_key.write().await;
+            *write = new_key;
+            drop(write);
+            let key = state.keycloak_decoding_key.read().await;
+            decode::<KeycloakClaims>(auth_header, &*key, &validation)
+                .map_err(|_| AppError::Unauthorized)?
+        }
+        Err(_) => return Err(AppError::Unauthorized),
+    };
 
     let kc = token_data.claims;
     let claims = Claims {

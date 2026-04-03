@@ -8,6 +8,7 @@ use axum::{
 };
 use axum::http::header::HeaderName;
 use jsonwebtoken::DecodingKey;
+use tokio::sync::RwLock;
 use tower_http::{
     cors::CorsLayer,
     request_id::{MakeRequestId, PropagateRequestIdLayer, RequestId, SetRequestIdLayer},
@@ -58,7 +59,7 @@ pub fn build_router(
     nws_client: Arc<NwsClient>,
     ca_client: reqwest::Client,
     intermediate_cert_der: Arc<Vec<u8>>,
-    keycloak_decoding_key: Arc<DecodingKey>,
+    keycloak_decoding_key: Arc<RwLock<DecodingKey>>,
 ) -> Router {
     let state = AppState {
         db: pool,

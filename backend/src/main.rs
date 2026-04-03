@@ -89,11 +89,11 @@ async fn main() -> Result<()> {
 
     let app_config = config::AppConfig::from_env();
 
-    let keycloak_decoding_key = Arc::new(
+    let keycloak_decoding_key = Arc::new(tokio::sync::RwLock::new(
         keycloak::fetch_decoding_key(&app_config)
             .await
             .expect("Failed to fetch Keycloak JWKS — is KEYCLOAK_URL/REALM correct?"),
-    );
+    ));
     tracing::info!("Keycloak JWKS loaded");
 
     let nws = Arc::new(nws_client::NwsClient::new());

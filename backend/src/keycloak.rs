@@ -29,6 +29,8 @@ pub fn map_role(roles: &[String]) -> String {
 pub fn build_validation(config: &AppConfig) -> Validation {
     let mut validation = Validation::new(Algorithm::RS256);
     validation.set_audience(&[&config.keycloak_client_id]);
+    let issuer = format!("{}/realms/{}", config.keycloak_url, config.keycloak_realm);
+    validation.set_issuer(&[issuer]);
     validation
 }
 

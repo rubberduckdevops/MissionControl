@@ -8,6 +8,7 @@ use mongodb::{
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+use tokio::sync::RwLock;
 
 use crate::{
     config::AppConfig,
@@ -32,7 +33,7 @@ pub struct AppState {
     pub nws_client: Arc<NwsClient>,
     pub ca_client: reqwest::Client,
     pub intermediate_cert_der: Arc<Vec<u8>>,
-    pub keycloak_decoding_key: Arc<DecodingKey>,
+    pub keycloak_decoding_key: Arc<RwLock<DecodingKey>>,
 }
 
 pub async fn me(
@@ -46,10 +47,10 @@ pub async fn me(
         "$set": {
             "email": &claims.email,
             "username": &claims.username,
-            "role": &claims.role,
             "updated_at": to_bson(&now).unwrap(),
         },
         "$setOnInsert": {
+            "role": &claims.role,
             "created_at": to_bson(&now).unwrap(),
         }
     };
@@ -61,5 +62,7 @@ pub async fn me(
         .find_one_and_update(filter, update, options)
         .await?
         .ok_or_else(|| AppError::Internal(anyhow::anyhow!("Upsert returned no document")))?;
-    Ok(Json(user.into()))
+    let mut user_public: UserPublic = user.into();
+    user_public.role = claims.role;
+    Ok(Json(user_public))
 }
